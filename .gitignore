@@ -1,0 +1,8 @@
+下載影片/
+platform_cookies.json
+*.bat
+__pycache__/
+*.pyc
+.download_registry.json
+logs/
+*.log

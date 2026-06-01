@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0">
+<title>去水印下載工具</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#050d0c;color:#e2eeee;min-height:100vh}
+
+/* ══ HERO ══ */
+.hero{background:linear-gradient(160deg,#021f1e 0%,#043330 40%,#062a22 70%,#040f10 100%);padding:28px 20px 24px;position:relative;overflow:hidden}
+.hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 60% 80% at 10% 50%,rgba(20,184,166,.12),transparent),radial-gradient(ellipse 40% 60% at 90% 20%,rgba(16,185,129,.08),transparent)}
+.hero-inner{max-width:680px;margin:0 auto;position:relative;z-index:1}
+.hero-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.hero-brand{display:flex;align-items:center;gap:12px}
+.hero-logo{width:44px;height:44px;background:linear-gradient(135deg,#0d9488,#14b8a6);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.4rem;box-shadow:0 4px 16px rgba(20,184,166,.35)}
+.hero-title{font-size:1.2rem;font-weight:800;color:#99f6e4;letter-spacing:.5px}
+.hero-sub{font-size:0.7rem;color:#2d6b65;margin-top:2px}
+.hero-btns{display:flex;gap:8px}
+.hero-btn{background:rgba(20,184,166,.1);border:1px solid rgba(20,184,166,.25);color:#5eead4;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:0.78rem;display:flex;align-items:center;gap:5px;transition:all .2s}
+.hero-btn:hover{background:rgba(20,184,166,.2)}
+.hero-btn.warn{background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.3);color:#f87171}
+
+/* platform badges */
+.plt-badges{display:flex;gap:6px;flex-wrap:wrap}
+.pbadge{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:16px;font-size:0.72rem;font-weight:500;border:1px solid}
+.pb-dy{background:#140a1e;border-color:#2a1440;color:#c084fc}
+.pb-tk{background:#0a1c16;border-color:#0f3020;color:#34d399}
+.pb-ks{background:#1a1508;border-color:#3a2c10;color:#fbbf24}
+.pb-bi{background:#0a1220;border-color:#152040;color:#60a5fa}
+.pb-yt{background:#1a0a0a;border-color:#3a1515;color:#f87171}
+.pb-xhs{background:#1a0810;border-color:#3a1020;color:#fb7185}
+.pb-sp{background:#0a1a08;border-color:#102a08;color:#4ade80}
+
+/* ══ MAIN ══ */
+.main{max-width:680px;margin:0 auto;padding:24px 20px 100px}
+
+/* URL card */
+.url-card{background:linear-gradient(160deg,#0b1a18,#081410);border:1px solid #0d2420;border-radius:16px;padding:20px;margin-bottom:16px}
+.card-head{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+.card-ico{width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#1c1000,#d97706);display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0}
+.card-name{font-size:1rem;font-weight:700;color:#99f6e4}
+.card-hint{font-size:0.7rem;color:#2d5a55;margin-top:2px}
+
+.inp-wrap{position:relative;margin-bottom:10px}
+.url-inp{width:100%;padding:12px 14px;border-radius:10px;border:1.5px solid #0d2420;background:#060f0f;color:#e2eeee;font-size:0.9rem;resize:none;line-height:1.5;transition:border-color .2s}
+.url-inp:focus{outline:none;border-color:#0d9488}
+.url-inp::placeholder{color:#1d4a45}
+
+.btn-row{display:flex;gap:8px;margin-bottom:8px}
+.btn{padding:10px 16px;border-radius:9px;border:none;cursor:pointer;font-weight:600;font-size:0.85rem;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:5px}
+.btn:disabled{opacity:.35;cursor:not-allowed}
+.btn-paste{flex:1;background:#042f2e;border:1px solid #0d9488;color:#5eead4}
+.btn-paste:hover:not(:disabled){background:#053d2a}
+.btn-parse{flex:2;background:linear-gradient(135deg,#d97706,#f59e0b);color:#fff;box-shadow:0 2px 8px rgba(217,119,6,.25)}
+.btn-parse:hover:not(:disabled){background:linear-gradient(135deg,#b45309,#d97706)}
+.btn-dl{width:100%;padding:11px;background:linear-gradient(135deg,#059669,#10b981);color:#fff;box-shadow:0 2px 8px rgba(16,185,129,.25);border-radius:10px;font-size:0.9rem}
+.btn-dl:hover:not(:disabled){background:linear-gradient(135deg,#047857,#059669)}
+
+/* status */
+.st{padding:8px 0;font-size:0.82rem;color:#2d5a55}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid #0d2420;border-top-color:#14b8a6;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:5px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* preview */
+.preview{background:#060f0f;border:1px solid #0d2420;border-radius:10px;overflow:hidden;display:none;margin-bottom:12px}
+.preview video,.preview img{width:100%;max-height:55vw;object-fit:cover;background:#000;display:block}
+.preview iframe{width:100%;aspect-ratio:16/9;border:none;background:#000;display:block}
+.preview-ph{width:100%;aspect-ratio:16/9;background:#0b1a18;display:flex;align-items:center;justify-content:center;font-size:3rem;color:#0d2420}
+.preview-body{padding:12px}
+.preview-title{font-size:0.88rem;font-weight:600;color:#e2eeee;margin-bottom:4px;line-height:1.4}
+.preview-meta{font-size:0.7rem;color:#2d5a55;margin-bottom:10px}
+
+/* quality */
+.qrow{margin-bottom:10px}
+.qlabel{font-size:0.72rem;color:#6ee7b7;margin-bottom:6px}
+.qbtns{display:flex;gap:6px;flex-wrap:wrap}
+.qbtn{padding:4px 12px;border-radius:14px;border:1px solid #0d9488;background:#042f2e;color:#5eead4;font-size:0.72rem;cursor:pointer;transition:all .15s}
+.qbtn.active{background:#0d9488;color:#fff;border-color:#14b8a6;font-weight:700}
+.qbtn:hover:not(.active){background:#053d2a}
+
+.dl-prog{font-size:0.72rem;color:#34d399;margin-top:6px;display:none}
+
+/* downloads section */
+.dls-card{background:linear-gradient(160deg,#0b1a18,#081410);border:1px solid #0d2420;border-radius:16px;padding:20px}
+.dls-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.dls-head h2{font-size:0.9rem;font-weight:700;color:#99f6e4}
+.dls-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+.dl-card{background:#0b1a18;border-radius:10px;overflow:hidden;border:1px solid #0d2420;cursor:pointer;transition:all .2s;position:relative}
+.dl-card:hover{border-color:#0d9488;transform:translateY(-2px)}
+.dl-thumb-wrap{position:relative;width:100%;aspect-ratio:16/9;background:#050d0c;overflow:hidden}
+.dl-thumb{width:100%;height:100%;object-fit:cover;display:block}
+.dl-play-ov{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.35);opacity:0;transition:opacity .2s}
+.dl-card:hover .dl-play-ov{opacity:1}
+.dl-play-icon{width:34px;height:34px;background:rgba(13,148,136,.85);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.9rem;padding-left:3px}
+.dl-info{padding:7px 9px}
+.dl-fname{font-size:0.72rem;color:#b2d8d4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px}
+.dl-fmeta{font-size:0.6rem;color:#1d4a45;display:flex;justify-content:space-between}
+.dls-empty{text-align:center;padding:40px;color:#1d4a45;font-size:0.85rem}
+
+/* ══ MODAL ══ */
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.82);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;z-index:200;padding:16px}
+.ov.hide{display:none}
+.modal{background:#0b1a18;border:1px solid #0d2420;border-radius:16px;width:100%;max-width:500px;overflow:hidden;max-height:92vh;display:flex;flex-direction:column;position:relative}
+.m-frame{width:100%;aspect-ratio:16/9;border:none;background:#000}
+.m-img{width:100%;aspect-ratio:16/9;object-fit:cover;background:#000}
+.m-body{padding:14px}
+.m-title{font-size:0.92rem;font-weight:600;line-height:1.4;margin-bottom:5px;color:#e2eeee}
+.m-meta{font-size:0.72rem;color:#1d4a45;margin-bottom:12px}
+.m-btns{display:flex;gap:8px}
+.m-btn{flex:1;padding:9px;border-radius:8px;border:none;cursor:pointer;font-weight:600;font-size:0.83rem;transition:all .2s}
+.m-close{position:absolute;top:9px;right:9px;background:rgba(0,0,0,.55);border:none;color:#fff;width:27px;height:27px;border-radius:50%;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;z-index:10}
+
+/* ══ COOKIES MODAL ══ */
+.guide-modal{position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;z-index:300;padding:16px}
+.guide-modal.hide{display:none}
+.guide-box{background:#0b1a18;border:1px solid #0d2420;border-radius:16px;width:100%;max-width:500px;max-height:90vh;overflow-y:auto}
+.guide-head{padding:14px 18px;border-bottom:1px solid #0d2420;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:#0b1a18}
+.guide-head h3{font-size:0.95rem;font-weight:700;color:#99f6e4}
+.guide-close{background:none;border:none;color:#2d5a55;cursor:pointer;font-size:1.2rem;line-height:1}
+.sel{width:100%;padding:9px 10px;border-radius:9px;border:1px solid #0d2420;background:#060f0f;color:#e2eeee;font-size:0.82rem}
+.inp{width:100%;padding:9px 12px;border-radius:9px;border:1px solid #0d2420;background:#060f0f;color:#e2eeee;font-size:0.85rem;transition:border-color .2s}
+.inp:focus{outline:none;border-color:#0d9488}
+
+/* ══ DISCLAIMER ══ */
+#disc-modal{position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:9000;display:flex;align-items:center;justify-content:center;padding:16px}
+#disc-modal.hide{display:none}
+#disc-box{background:#0d1f16;border:1px solid #166534;border-radius:16px;width:100%;max-width:500px;padding:24px;max-height:90vh;overflow-y:auto}
+#disc-box h2{color:#4ade80;font-size:1rem;margin-bottom:14px;text-align:center}
+#disc-box p{font-size:0.78rem;color:#94a3b8;line-height:1.8;margin-bottom:10px}
+#disc-box ul{font-size:0.78rem;color:#94a3b8;padding-left:18px;line-height:1.9;margin-bottom:14px}
+#disc-box .disc-agree{display:flex;align-items:center;gap:8px;margin-bottom:16px;cursor:pointer}
+#disc-box .disc-agree input{width:16px;height:16px;accent-color:#10b981;flex-shrink:0;cursor:pointer}
+#disc-box .disc-agree span{font-size:0.8rem;color:#d1fae5}
+#disc-btn{width:100%;padding:11px;background:linear-gradient(135deg,#059669,#10b981);color:#fff;border:none;border-radius:10px;font-size:0.9rem;font-weight:700;cursor:pointer;opacity:.4;pointer-events:none;transition:opacity .2s}
+#disc-btn.on{opacity:1;pointer-events:auto}
+
+/* ══ TOAST ══ */
+.toast{position:fixed;top:12px;right:12px;background:#059669;color:#fff;padding:8px 14px;border-radius:8px;font-size:0.8rem;z-index:999;animation:fi .3s;max-width:280px;box-shadow:0 4px 14px rgba(0,0,0,.4)}
+.toast.err{background:#dc2626}
+@keyframes fi{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+
+/* ══ DOWNLOAD PROGRESS OVERLAY ══ */
+#dl-overlay{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:rgba(4,20,14,.96);border:1px solid #065f46;color:#a7f3d0;padding:14px 20px;border-radius:14px;min-width:300px;max-width:420px;z-index:1100;display:none;box-shadow:0 8px 32px rgba(0,0,0,.6);backdrop-filter:blur(8px)}
+#dl-overlay-title{font-size:0.78rem;color:#6ee7b7;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#dl-bar-wrap{background:#0a2a1a;border-radius:6px;height:10px;overflow:hidden;margin-bottom:6px}
+#dl-bar-fill{height:100%;background:linear-gradient(90deg,#059669,#10b981);border-radius:6px;width:0%;transition:width .4s ease}
+#dl-overlay-row{display:flex;justify-content:space-between;font-size:0.75rem}
+#dl-pct{font-weight:700;color:#34d399}
+#dl-msg{color:#6ee7b7;max-width:240px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+@media(max-width:500px){
+  .hero-title{font-size:1rem}
+  .plt-badges{display:none}
+}
+</style>
+</head>
+<body>
+
+<!-- ══ 免責聲明 ══ -->
+<div id="disc-modal" class="hide">
+  <div id="disc-box">
+    <h2>⚠️ 使用前請閱讀免責聲明</h2>
+    <p>本工具僅供<strong style="color:#4ade80">個人合法用途</strong>使用，例如下載自己擁有版權的內容、或在各平台明確允許下載的公開影片。</p>
+    <ul>
+      <li>本工具不儲存任何使用者影片或個人資料</li>
+      <li>下載行為由使用者自行負責，請遵守各國著作權法及各平台服務條款</li>
+      <li>禁止利用本工具從事商業侵權、非法散布受版權保護的內容</li>
+      <li>本工具開發者不對任何使用者的下載行為承擔法律責任</li>
+    </ul>
+    <label class="disc-agree">
+      <input type="checkbox" id="disc-chk" onchange="document.getElementById('disc-btn').classList.toggle('on',this.checked)">
+      <span>我已閱讀並同意上述條款，且確認我的使用符合當地法律</span>
+    </label>
+    <button id="disc-btn" onclick="agreeDisclaimer()">同意並繼續使用</button>
+  </div>
+</div>
+
+<!-- ══ HERO ══ -->
+<div class="hero">
+  <div class="hero-inner">
+    <div class="hero-top">
+      <div class="hero-brand">
+        <div class="hero-logo">⬇️</div>
+        <div>
+          <div class="hero-title">去水印下載工具</div>
+          <div class="hero-sub">貼上連結 · 一鍵去水印下載</div>
+        </div>
+      </div>
+      <div class="hero-btns">
+        <button class="hero-btn warn" id="btn-ck" onclick="toggleCookies()">🍪 Cookies</button>
+      </div>
+    </div>
+    <div class="plt-badges">
+      <span class="pbadge pb-dy">抖音</span>
+      <span class="pbadge pb-tk">TikTok</span>
+      <span class="pbadge pb-ks">快手</span>
+      <span class="pbadge pb-bi">B站</span>
+      <span class="pbadge pb-yt">YouTube</span>
+      <span class="pbadge pb-xhs">小紅書</span>
+      <span class="pbadge pb-sp">蝦皮短影音</span>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MAIN ══ -->
+<div class="main">
+
+  <!-- URL 下載卡片 -->
+  <div class="url-card">
+    <div class="card-head">
+      <div class="card-ico">🔗</div>
+      <div>
+        <div class="card-name">貼上影片連結</div>
+        <div class="card-hint">支援抖音分享文字直接貼上，自動提取網址</div>
+      </div>
+    </div>
+
+    <textarea class="url-inp" id="url-inp" placeholder="貼上影片連結或抖音/TikTok 分享文字（整段貼上即可）" rows="3"></textarea>
+
+    <div class="btn-row">
+      <button class="btn btn-paste" onclick="pasteAndParse()">📋 貼上並解析</button>
+      <button class="btn btn-parse" id="btn-parse" onclick="fetchUrl()">🔍 開始解析</button>
+    </div>
+
+    <div id="st-url" class="st" style="display:none"></div>
+
+    <!-- 預覽區 -->
+    <div class="preview" id="preview">
+      <iframe id="url-fr" style="display:none"></iframe>
+      <video id="url-video" controls playsinline style="display:none"></video>
+      <img id="url-thumb" src="" style="display:none" referrerpolicy="no-referrer" onerror="this.style.display='none';document.getElementById('url-ph').style.display='flex'">
+      <div class="preview-ph" id="url-ph" style="display:none">🎬</div>
+      <div class="preview-body">
+        <div id="url-title" class="preview-title"></div>
+        <div id="url-meta" class="preview-meta"></div>
+        <div id="quality-sel" class="qrow" style="display:none">
+          <div class="qlabel">選擇畫質</div>
+          <div class="qbtns" id="quality-btns"></div>
+        </div>
+        <button class="btn btn-dl" id="btn-udl" onclick="dlUrl()" disabled>⬇️ 去水印下載</button>
+        <div id="url-prog" class="dl-prog"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 已下載 -->
+  <div class="dls-card">
+    <div class="dls-head">
+      <h2>📁 已下載</h2>
+      <button class="hero-btn" onclick="loadDls()" style="font-size:0.72rem;padding:5px 12px">🔄 重新整理</button>
+    </div>
+    <div id="dls-list"><div class="dls-empty">尚無已下載影片</div></div>
+  </div>
+
+</div>
+
+<!-- ══ MODAL (播放已下載) ══ -->
+<div class="ov hide" id="ov" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <button class="m-close" onclick="closeModal()">✕</button>
+    <iframe id="m-fr" class="m-frame" style="display:none" allowfullscreen></iframe>
+    <img id="m-img" class="m-img" style="display:none">
+    <video id="m-vid" class="m-img" style="display:none" controls playsinline></video>
+    <div class="m-body">
+      <div class="m-title" id="m-title"></div>
+      <div class="m-meta" id="m-meta"></div>
+      <div class="m-btns" id="m-btns"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ COOKIES MODAL ══ -->
+<div class="guide-modal hide" id="cookies-modal" onclick="if(event.target===this)toggleCookies()">
+  <div class="guide-box">
+    <div class="guide-head">
+      <h3>🍪 平台 Cookies 設定</h3>
+      <button class="guide-close" onclick="toggleCookies()">✕</button>
+    </div>
+    <div style="padding:16px 20px;display:flex;flex-direction:column;gap:14px">
+      <div style="font-size:0.75rem;color:#5eead4;background:#0a1f1a;border:1px solid #0d3a20;border-radius:8px;padding:10px 12px;line-height:1.7">
+        <b style="color:#99f6e4">為什麼需要 Cookies？</b><br>
+        抖音／快手／TikTok 會封鎖無登入的請求。貼上你的帳號 Cookies 後，工具能正常解析。<br>
+        <b style="color:#fbbf24">做法：</b>在 Edge 安裝 <b style="color:#fff">「Cookie Editor」</b> → 登入平台 → 點擴充圖示 → Export → 複製貼到下方。
+      </div>
+      <div id="ck-status" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+      <div>
+        <div style="font-size:0.8rem;color:#5eead4;font-weight:600;margin-bottom:6px">選擇平台</div>
+        <select class="sel" id="ck-platform" style="margin-bottom:8px">
+          <option value="douyin">抖音 (douyin.com)</option>
+          <option value="kuaishou">快手 (kuaishou.com)</option>
+          <option value="tiktok">TikTok (tiktok.com)</option>
+        </select>
+        <textarea class="inp" id="ck-json" placeholder='貼上 Cookie Editor 匯出的 JSON' rows="5" style="resize:vertical;font-size:0.72rem;font-family:monospace;line-height:1.4"></textarea>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="btn" onclick="saveCookies()" style="flex:2;padding:8px;background:linear-gradient(135deg,#0d9488,#14b8a6);color:#fff;border-radius:9px;font-weight:600">✅ 儲存 Cookies</button>
+          <button class="btn" onclick="delCookies()" style="flex:1;padding:8px;background:#141420;border:1px solid #3b1515;color:#f87171;border-radius:9px;font-weight:600">🗑️ 清除</button>
+        </div>
+        <div id="ck-msg" style="font-size:0.72rem;margin-top:6px;color:#34d399;display:none"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ 全局下載進度條 ══ -->
+<div id="dl-overlay">
+  <div id="dl-overlay-title">下載中...</div>
+  <div id="dl-bar-wrap"><div id="dl-bar-fill"></div></div>
+  <div id="dl-overlay-row">
+    <span id="dl-msg">準備中...</span>
+    <span id="dl-pct">0%</span>
+  </div>
+</div>
+
+<script>
+const API = '';
+let urlInfo = null;
+
+/* ── 免責聲明 ── */
+function agreeDisclaimer(){
+  localStorage.setItem('dl_disclaimer','1');
+  document.getElementById('disc-modal').classList.add('hide');
+}
+(function(){ if(!localStorage.getItem('dl_disclaimer')) document.getElementById('disc-modal').classList.remove('hide'); })();
+
+/* ── 工具函數 ── */
+function toast(m,err=false){ const t=document.createElement('div'); t.className='toast'+(err?' err':''); t.textContent=m; document.body.appendChild(t); setTimeout(()=>t.remove(),3500); }
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function fmtD(s){ if(!s) return ''; const m=Math.floor(s/60),sc=s%60; return `${m}:${String(sc).padStart(2,'0')}`; }
+function isMobile(){ return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)||window.innerWidth<600; }
+function setSt(h){ const e=document.getElementById('st-url'); e.innerHTML=h; e.style.display=h?'block':'none'; }
+function getDeviceId(){ let id=localStorage.getItem('dl_device_id'); if(!id){ id=crypto.randomUUID(); localStorage.setItem('dl_device_id',id); } return id; }
+function extractUrl(text){ const m=text.match(/https?:\/\/[^\s一-鿿＀-￯　-〿⺀-⻿]+/); if(m) return m[0].replace(/[,，。！？、]+$/,''); return text.trim(); }
+function getSavePath(){ return isMobile()?'':localStorage.getItem('dl_save_path')||''; }
+
+/* ── iOS / Android 手機儲存 ── */
+function _iosSaveSetup(ov, dlHref, fname, sizeHint){
+  const isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent)&&!window.MSStream;
+  const btnLabel=isIOS?'📥 儲存到 iPhone':'📥 儲存到手機';
+  ov.innerHTML=`<div style="text-align:center;padding:4px 0">
+    <div id="_ios_sv_msg" style="font-size:0.82rem;color:#6ee7b7;margin-bottom:6px">${sizeHint?'傳送中（'+sizeHint+'）請勿關閉...':'傳送中，請勿關閉...'}</div>
+    <div style="background:#0a2a1a;border-radius:6px;height:8px;overflow:hidden;margin-bottom:10px">
+      <div id="_ios_sv_bar" style="height:100%;background:linear-gradient(90deg,#0d9488,#14b8a6);width:0%;transition:width .3s"></div>
+    </div>
+    <button id="_ios_sv_btn" disabled style="display:block;width:100%;padding:13px;background:#1a3a38;color:#4a8a88;border-radius:12px;border:none;font-size:1rem;font-weight:700;margin-bottom:8px;cursor:not-allowed">傳送中...</button>
+    <div id="_ios_sv_st" style="font-size:0.78rem;color:#6ee7b7;min-height:20px;margin-bottom:8px;line-height:1.6"></div>
+    <button onclick="document.getElementById('dl-overlay').style.display='none'" style="background:transparent;border:1px solid #065f46;color:#6ee7b7;border-radius:8px;padding:6px 20px;cursor:pointer;font-size:0.8rem">關閉</button>
+  </div>`;
+  let _readyFile=null;
+  let _wakeLock=null;
+  navigator.wakeLock?.request('screen').then(wl=>{ _wakeLock=wl; }).catch(()=>{});
+  const _releaseWL=()=>{ try{ _wakeLock?.release(); }catch(_){} _wakeLock=null; };
+  const _doShare=async(file,st2,btn2)=>{
+    btn2.textContent='選擇儲存位置...';
+    if(st2) st2.innerHTML=`<span style="color:#fbbf24;font-weight:700">👉 請在彈出選單中點「${isIOS?'儲存到照片':'儲存影片/下載'}」</span>`;
+    await navigator.share({files:[file],title:fname});
+    if(st2){
+      st2.innerHTML=`有成功儲存嗎？
+        <button onclick="document.getElementById('dl-overlay').style.display='none'" style="margin-left:6px;padding:3px 12px;background:#065f46;color:#4ade80;border:none;border-radius:6px;font-size:0.8rem;cursor:pointer">✅ 有</button>
+        <button id="_ios_retry_btn" style="margin-left:4px;padding:3px 12px;background:#1c1200;color:#fbbf24;border:1px solid #854d0e;border-radius:6px;font-size:0.8rem;cursor:pointer">❌ 沒有，重試</button>`;
+      document.getElementById('_ios_retry_btn').onclick=async function(){
+        st2.textContent='';btn2.disabled=true;
+        try{ await _doShare(_readyFile,st2,btn2); }catch(err){ _onShareErr(err,st2,btn2); }
+      };
+    }
+    btn2.textContent=btnLabel+' 🔄 重試'; btn2.disabled=false;
+  };
+  const _onShareErr=(e,st2,btn2)=>{
+    if(e.name==='AbortError'){
+      if(st2) st2.textContent='已取消，可再次點擊重試';
+      btn2.textContent=btnLabel; btn2.disabled=false;
+    } else {
+      if(_readyFile){
+        const blobUrl=URL.createObjectURL(_readyFile);
+        if(isIOS){
+          window.open(blobUrl,'_blank');
+          if(st2) st2.textContent='在新頁面點底部 ⬆️ 分享圖示 → 「儲存到照片」';
+        } else {
+          const a=document.createElement('a'); a.href=blobUrl; a.download=fname;
+          document.body.appendChild(a); a.click(); document.body.removeChild(a);
+          setTimeout(()=>URL.revokeObjectURL(blobUrl),8000);
+          if(st2) st2.textContent='✅ 正在下載...';
+          btn2.textContent='✅ 已送出'; btn2.disabled=true;
+        }
+      }
+    }
+  };
+  (async()=>{
+    const msg=document.getElementById('_ios_sv_msg');
+    const bar=document.getElementById('_ios_sv_bar');
+    const btn=document.getElementById('_ios_sv_btn');
+    const st =document.getElementById('_ios_sv_st');
+    try{
+      const resp=await fetch(dlHref);
+      if(!resp.ok) throw new Error('伺服器回應 '+resp.status);
+      const total=+(resp.headers.get('Content-Length')||0);
+      const reader=resp.body.getReader();
+      const chunks=[]; let received=0;
+      while(true){
+        const{done,value}=await reader.read();
+        if(done) break;
+        chunks.push(value); received+=value.length;
+        const mb=(received/1048576).toFixed(1);
+        const tot=total?'/'+(total/1048576).toFixed(1):'';
+        msg.textContent=`傳送中 ${mb}${tot}MB，請勿鎖屏`;
+        if(total) bar.style.width=Math.min(99,received/total*100).toFixed(0)+'%';
+      }
+      const blob=new Blob(chunks,{type:'video/mp4'});
+      _readyFile=new File([blob],fname,{type:'video/mp4'});
+      _releaseWL(); bar.style.width='100%';
+      msg.textContent='✅ 傳送完成！點下方按鈕儲存';
+      btn.disabled=false;
+      btn.style.cssText='display:block;width:100%;padding:13px;background:linear-gradient(135deg,#0d9488,#14b8a6);color:#fff;border-radius:12px;border:none;font-size:1rem;font-weight:700;margin-bottom:8px;cursor:pointer';
+      btn.textContent=btnLabel;
+    }catch(e){
+      _releaseWL();
+      const msg2=document.getElementById('_ios_sv_msg');
+      if(msg2) msg2.textContent='⚠️ 傳送失敗：'+e.message;
+      return;
+    }
+    const btn2=document.getElementById('_ios_sv_btn');
+    if(!btn2) return;
+    btn2.onclick=async function(){
+      this.disabled=true;
+      const st2=document.getElementById('_ios_sv_st');
+      if(navigator.canShare&&navigator.canShare({files:[_readyFile]})){
+        try{ await _doShare(_readyFile,st2,this); }catch(e){ _onShareErr(e,st2,this); }
+      } else { _onShareErr(new Error('canShare=false'),st2,this); }
+    };
+  })();
+}
+
+function _androidSaveSetup(ov, dlHref, fname, sizeHint){
+  const ua=navigator.userAgent;
+  const isInApp=/Line\/|FBAN|FB_IAB|Instagram|MicroMessenger|KAKAOTALK/i.test(ua);
+  if(isInApp){ _iosSaveSetup(ov,dlHref,fname,sizeHint); return; }
+  const safeHref=dlHref.replace(/"/g,'%22');
+  const safeFname=(fname||'影片.mp4').replace(/"/g,'&quot;');
+  ov.innerHTML=`<div style="text-align:center;padding:4px 0">
+    <div style="font-size:0.85rem;color:#6ee7b7;margin-bottom:14px">✅ 影片已備妥${sizeHint?' ('+sizeHint+')':''}</div>
+    <a id="_adl_a" href="${safeHref}" download="${safeFname}"
+       style="display:block;width:100%;padding:14px;background:linear-gradient(135deg,#059669,#10b981);color:#fff;border-radius:12px;font-size:1.05rem;font-weight:700;margin-bottom:10px;text-decoration:none;box-sizing:border-box">
+      📥 下載到手機
+    </a>
+    <button onclick="document.getElementById('dl-overlay').style.display='none'" style="background:transparent;border:1px solid #065f46;color:#6ee7b7;border-radius:8px;padding:6px 20px;cursor:pointer;font-size:0.8rem">關閉</button>
+  </div>`;
+  document.getElementById('_adl_a').addEventListener('click',function(){
+    this.style.opacity='0.5'; this.nextElementSibling.textContent='⬇️ 下載中，請查看通知列...';
+  });
+}
+
+/* ── 核心下載函數（SSE進度）── */
+async function dlVideo(url, title, cdnUrl, cdnAudioUrl, quality){
+  const savePath = getSavePath();
+  return new Promise((resolve)=>{
+    const ov=document.getElementById('dl-overlay');
+    ov.innerHTML=`<div id="dl-overlay-title" style="font-size:0.78rem;color:#6ee7b7;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div><div id="dl-bar-wrap" style="background:#0a2a1a;border-radius:6px;height:10px;overflow:hidden;margin-bottom:6px"><div id="dl-bar-fill" style="height:100%;background:linear-gradient(90deg,#059669,#10b981);border-radius:6px;width:0%;transition:width .4s ease"></div></div><div id="dl-overlay-row" style="display:flex;justify-content:space-between;font-size:0.75rem"><span id="dl-pct" style="font-weight:700;color:#34d399">0%</span><span id="dl-msg" style="color:#6ee7b7;max-width:240px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">準備中...</span></div>`;
+    const fill=document.getElementById('dl-bar-fill');
+    const pctEl=document.getElementById('dl-pct');
+    const msgEl=document.getElementById('dl-msg');
+    const titleEl=document.getElementById('dl-overlay-title');
+    titleEl.textContent=title||'影片';
+    fill.style.width='0%'; pctEl.textContent='0%'; msgEl.textContent='準備中...';
+    ov.style.display='block';
+    const extra={};
+    if(savePath) extra.save_path=savePath;
+    if(cdnUrl) extra.cdn_url=cdnUrl;
+    if(cdnAudioUrl) extra.cdn_audio_url=cdnAudioUrl;
+    if(quality&&quality!=='best') extra.quality=quality;
+    const params=new URLSearchParams({url,title:title||'影片',device_id:getDeviceId(),...extra});
+    const es=new EventSource(API+'/api/download-progress?'+params.toString());
+    es.onmessage=(e)=>{
+      try{
+        const d=JSON.parse(e.data);
+        if(d.type==='progress'){
+          const p=Math.min(100,d.pct||0);
+          fill.style.width=p+'%'; pctEl.textContent=p+'%';
+          if(d.msg) msgEl.textContent=d.msg;
+        } else if(d.type==='done'){
+          fill.style.width='100%'; pctEl.textContent='100%';
+          es.close();
+          if(isMobile() && d.filename && d.saved_dir){
+            const dlHref=API+'/api/serve-file?filename='+encodeURIComponent(d.filename)+'&cleanup=true';
+            const isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent)&&!window.MSStream;
+            if(isIOS){ _iosSaveSetup(ov,dlHref,d.filename,d.size_mb+'MB'); }
+            else      { _androidSaveSetup(ov,dlHref,d.filename,d.size_mb+'MB'); }
+          } else {
+            setTimeout(()=>{ ov.style.display='none'; },2000);
+            toast(`✅ 已儲存：${d.filename}（${d.size_mb}MB）`);
+            loadDls();
+          }
+          resolve(true);
+        } else if(d.type==='error'){
+          es.close(); ov.style.display='none';
+          toast('下載失敗：'+d.message,true); resolve(false);
+        }
+      }catch(err){ es.close(); ov.style.display='none'; resolve(false); }
+    };
+    es.onerror=()=>{ es.close(); ov.style.display='none'; toast('下載連線中斷',true); resolve(false); };
+  });
+}
+
+/* ── URL 解析 ── */
+async function fetchUrl(){
+  const raw=document.getElementById('url-inp').value.trim();
+  if(!raw){ toast('請先貼上網址或分享文字',true); return; }
+  const url=extractUrl(raw);
+  if(!url||!url.startsWith('http')){ toast('找不到有效網址，請確認貼上內容包含 http',true); return; }
+  if(url!==raw) toast('已提取網址：'+url.slice(0,50)+(url.length>50?'...':''));
+  setSt('<span class="spin"></span>讀取影片資訊...');
+  const prev=document.getElementById('preview');
+  prev.style.display='none';
+  document.getElementById('url-fr').style.display='none';
+  document.getElementById('url-fr').src='';
+  document.getElementById('url-video').style.display='none';
+  document.getElementById('url-video').src='';
+  document.getElementById('url-thumb').style.display='none';
+  document.getElementById('url-ph').style.display='none';
+  document.getElementById('btn-udl').disabled=true;
+  document.getElementById('btn-udl').textContent='⬇️ 去水印下載';
+  try{
+    const r=await fetch(API+'/api/video-info?url='+encodeURIComponent(url));
+    const d=await r.json();
+    if(d.error){ setSt((d.error_hint||'讀取失敗：'+d.error)); return; }
+    if(d.error_hint){ setSt('⚠️ '+d.error_hint); } else { setSt(''); }
+    urlInfo={...d,url};
+    const vid=document.getElementById('url-video');
+    const thumb=document.getElementById('url-thumb');
+    if(d.thumbnail){
+      thumb.src=d.thumbnail; thumb.referrerPolicy='no-referrer'; thumb.style.display='block';
+    } else {
+      document.getElementById('url-ph').style.display='flex';
+    }
+    const _vidFallback=()=>{
+      vid.style.display='none'; vid.src='';
+      if(d.thumbnail){ thumb.src=d.thumbnail; thumb.style.display='block'; }
+      else { document.getElementById('url-ph').style.display='flex'; }
+      if(!d.error_hint) setSt('⚠️ 此平台不支援直接預覽，但仍可去水印下載');
+    };
+    if(d.embed_url){
+      const fr=document.getElementById('url-fr');
+      fr.src=d.embed_url; fr.style.display='block';
+      vid.style.display='none'; thumb.style.display='none';
+      document.getElementById('url-ph').style.display='none';
+    } else if(d.proxy_url){
+      vid.src=API+d.proxy_url; vid.style.display='block'; vid.controls=true;
+      thumb.style.display='none';
+      document.getElementById('url-ph').style.display='none';
+      vid.onerror=_vidFallback;
+    } else if(d.cdn_url){
+      vid.src=d.cdn_url; vid.style.display='block'; vid.controls=true;
+      thumb.style.display='none';
+      document.getElementById('url-ph').style.display='none';
+      vid.onerror=_vidFallback;
+    }
+    document.getElementById('url-title').textContent=d.title||d.platform||'未知標題';
+    document.getElementById('url-meta').textContent=[d.uploader,d.platform,d.duration?fmtD(d.duration):''].filter(Boolean).join(' · ');
+    renderFormats(d.formats||[]);
+    prev.style.display='block';
+    document.getElementById('url-prog').style.display='none';
+    const canDownload = !!(d.cdn_url || d.proxy_url || (d.formats && d.formats.length));
+    document.getElementById('btn-udl').disabled=!canDownload;
+    document.getElementById('btn-udl').textContent=canDownload?'⬇️ 去水印下載':'❌ 無法下載（需要 Cookies）';
+    if(!d.error_hint) setSt('');
+  }catch(e){ setSt('連線失敗：'+e.message); }
+}
+
+async function pasteAndParse(){
+  try{
+    const text=await navigator.clipboard.readText();
+    if(!text){ toast('剪貼簿是空的',true); return; }
+    document.getElementById('url-inp').value=text;
+    fetchUrl();
+  }catch(e){ toast('請允許剪貼簿權限，或直接手動貼上後點解析',true); }
+}
+
+/* ── 下載 URL ── */
+async function dlUrl(){
+  if(!urlInfo) return;
+  const btn=document.getElementById('btn-udl'), prog=document.getElementById('url-prog');
+  const quality=urlInfo.selectedQuality||'best';
+  let cdnUrl=urlInfo.cdn_url||'';
+  const cdnAudioUrl=urlInfo.cdn_audio_url||'';
+  if(quality!=='best' && urlInfo.formats && urlInfo.formats.length){
+    const fmt=urlInfo.formats.find(f=>f.id===quality);
+    if(fmt&&fmt.url) cdnUrl=fmt.url;
+  }
+  const _isXHS=(urlInfo.url||'').includes('xiaohongshu.com')||(urlInfo.url||'').includes('xhslink.com');
+  if(isMobile() && cdnUrl && !cdnAudioUrl && !_isXHS){
+    const origin=(()=>{ try{ return new URL(urlInfo.url).origin; }catch(e){ return ''; } })();
+    const q=new URLSearchParams({url:cdnUrl,title:urlInfo.title||'影片',referer:origin});
+    const fname=(urlInfo.title||'影片').replace(/[/:*?"<>|]/g,'_').slice(0,60)+'.mp4';
+    const dlStreamUrl=API+'/api/dl-stream?'+q;
+    const ov=document.getElementById('dl-overlay');
+    ov.style.display='block';
+    const isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent)&&!window.MSStream;
+    if(isIOS){ _iosSaveSetup(ov,dlStreamUrl,fname,''); }
+    else      { _androidSaveSetup(ov,dlStreamUrl,fname,''); }
+    return;
+  }
+  btn.disabled=true; btn.textContent='下載中...'; prog.style.display='block'; prog.textContent='正在去水印下載...';
+  const ok=await dlVideo(urlInfo.url,urlInfo.title,cdnUrl,cdnAudioUrl,quality);
+  btn.disabled=false; btn.textContent='⬇️ 去水印下載';
+  prog.textContent=ok?'✅ 下載完成！':'❌ 下載失敗';
+  if(ok) setTimeout(()=>{ prog.textContent=''; prog.style.display='none'; },3000);
+}
+
+/* ── 畫質選擇器 ── */
+function renderFormats(formats){
+  const selEl=document.getElementById('quality-sel');
+  const btns=document.getElementById('quality-btns');
+  if(!formats||formats.length<=1){ selEl.style.display='none'; btns.innerHTML=''; return; }
+  selEl.style.display='block';
+  const defIdx=formats.length-1;
+  btns.innerHTML=formats.map((f,i)=>
+    `<button class="qbtn${i===defIdx?' active':''}" onclick="selectQuality(this,'${esc(f.id)}')">${esc(f.label)}</button>`
+  ).join('');
+  if(urlInfo) urlInfo.selectedQuality=formats[defIdx].id;
+}
+function selectQuality(el,qid){
+  document.querySelectorAll('#quality-btns .qbtn').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  if(urlInfo) urlInfo.selectedQuality=qid;
+}
+
+/* ── 已下載清單 ── */
+async function loadDls(){
+  const el=document.getElementById('dls-list');
+  el.innerHTML='<div class="dls-empty">載入中...</div>';
+  try{
+    const r=await fetch(API+'/api/downloads?device_id='+encodeURIComponent(getDeviceId()));
+    const d=await r.json();
+    if(!d.length){ el.innerHTML='<div class="dls-empty">尚無已下載影片</div>'; return; }
+    el.innerHTML='<div class="dls-grid">'+d.map(f=>`
+      <div class="dl-card" onclick="openDlVideo('${esc(API+f.url)}','${esc(f.name)}','${f.size_mb}')">
+        <div class="dl-thumb-wrap">
+          <video class="dl-thumb" src="${esc(API+f.url)}#t=1" preload="metadata" muted playsinline onloadedmetadata="if(this.duration>1)this.currentTime=1"></video>
+          <div class="dl-play-ov"><div class="dl-play-icon">▶</div></div>
+        </div>
+        <div class="dl-info">
+          <div class="dl-fname" title="${esc(f.name)}">${esc(f.name.replace(/\.[^.]+$/,''))}</div>
+          <div class="dl-fmeta"><span>${f.size_mb} MB</span><span style="color:#0d9488">▶</span></div>
+        </div>
+      </div>`).join('')+'</div>';
+  }catch(e){ el.innerHTML='<div class="dls-empty">載入失敗</div>'; }
+}
+
+function openDlVideo(url,name,sizeMb){
+  const fr=document.getElementById('m-fr'),mi=document.getElementById('m-img'),mv=document.getElementById('m-vid');
+  fr.src=''; fr.style.display='none'; mi.style.display='none';
+  mv.src=url; mv.style.display='block'; mv.play().catch(()=>{});
+  document.getElementById('m-title').textContent=name.replace(/\.[^.]+$/,'');
+  document.getElementById('m-meta').textContent=sizeMb+' MB';
+  document.getElementById('m-btns').innerHTML=`<a class="m-btn" href="${esc(url)}" download="${esc(name)}" style="text-align:center;text-decoration:none;background:linear-gradient(135deg,#059669,#10b981);color:#fff;border-radius:8px;padding:9px;font-weight:600;font-size:0.83rem">⬇️ 儲存到本機</a>`;
+  document.getElementById('ov').classList.remove('hide');
+}
+function closeModal(){
+  const mv=document.getElementById('m-vid'); mv.pause(); mv.src='';
+  document.getElementById('m-fr').src='';
+  document.getElementById('ov').classList.add('hide');
+}
+
+/* ── Cookies 管理 ── */
+function toggleCookies(){
+  document.getElementById('cookies-modal').classList.toggle('hide');
+  loadCookieStatus();
+}
+async function loadCookieStatus(){
+  try{
+    const r=await fetch(API+'/api/cookies/status');
+    const d=await r.json();
+    const labels={'douyin':'抖音','kuaishou':'快手','tiktok':'TikTok'};
+    document.getElementById('ck-status').innerHTML=Object.keys(labels).map(p=>`
+      <span style="padding:3px 10px;border-radius:12px;font-size:0.7rem;background:${d[p]>0?'#042f2e':'#141414'};border:1px solid ${d[p]>0?'#0d9488':'#252525'};color:${d[p]>0?'#5eead4':'#4b5563'}">
+        ${labels[p]}: ${d[p]>0?d[p]+'個 ✅':'未設定'}
+      </span>`).join('');
+    const total=Object.values(d).reduce((a,b)=>a+b,0);
+    const btn=document.getElementById('btn-ck');
+    if(total>0){ btn.style.background='rgba(13,148,136,.15)'; btn.style.borderColor='rgba(13,148,136,.4)'; btn.style.color='#5eead4'; btn.className='hero-btn'; }
+    else        { btn.className='hero-btn warn'; }
+  }catch(e){}
+}
+async function saveCookies(){
+  const platform=document.getElementById('ck-platform').value;
+  const jsonTxt=document.getElementById('ck-json').value.trim();
+  const msg=document.getElementById('ck-msg'); msg.style.display='none';
+  if(!jsonTxt){ toast('請先貼上 Cookies JSON',true); return; }
+  try{ JSON.parse(jsonTxt); }catch(e){ toast('JSON 格式錯誤',true); return; }
+  try{
+    const fd=new FormData(); fd.append('platform',platform); fd.append('cookies_json',jsonTxt);
+    const r=await fetch(API+'/api/cookies/save',{method:'POST',body:fd});
+    const d=await r.json();
+    if(d.ok){ msg.style.color='#34d399'; msg.style.display='block'; msg.textContent='✅ 已儲存 '+d.count+' 個 Cookies'; loadCookieStatus(); }
+    else { msg.style.color='#f87171'; msg.style.display='block'; msg.textContent='❌ '+(d.error||'儲存失敗'); }
+  }catch(e){ toast('儲存失敗：'+e.message,true); }
+}
+async function delCookies(){
+  const platform=document.getElementById('ck-platform').value;
+  try{
+    await fetch(API+'/api/cookies/'+platform,{method:'DELETE'});
+    document.getElementById('ck-json').value='';
+    document.getElementById('ck-msg').style.display='none';
+    loadCookieStatus(); toast('✅ 已清除 '+platform+' Cookies');
+  }catch(e){ toast('清除失敗',true); }
+}
+
+/* ── 初始化 ── */
+loadDls();
+(async function(){ try{ const r=await fetch(API+'/api/cookies/status'); const d=await r.json(); const total=Object.values(d).reduce((a,b)=>a+b,0); const btn=document.getElementById('btn-ck'); if(total>0){ btn.style.background='rgba(13,148,136,.15)'; btn.style.borderColor='rgba(13,148,136,.4)'; btn.style.color='#5eead4'; btn.className='hero-btn'; } }catch(e){} })();
+</script>
+</body>
+</html>
