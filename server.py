@@ -43,12 +43,24 @@ def _registry_get_files(device_id: str) -> set:
         return set()
 
 def _load_platform_cookies() -> dict:
+    # 優先：從檔案讀（管理員在UI設定的）
     try:
         if COOKIES_FILE.exists():
-            return json.loads(COOKIES_FILE.read_text(encoding="utf-8"))
+            data = json.loads(COOKIES_FILE.read_text(encoding="utf-8"))
+            if data:
+                return data
     except Exception:
         pass
-    return {}
+    # 備用：從 Railway 環境變數讀（管理員在 Railway Dashboard 設定的）
+    result = {}
+    for plat in ["douyin", "kuaishou", "tiktok"]:
+        env_val = os.environ.get(f"{plat.upper()}_COOKIES", "")
+        if env_val:
+            try:
+                result[plat] = json.loads(env_val)
+            except Exception:
+                pass
+    return result
 
 def _get_cookies_for_url(url: str) -> list[dict]:
     data = _load_platform_cookies()
