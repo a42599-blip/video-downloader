@@ -277,6 +277,52 @@ def _cookies_to_netscape(cookie_list: list, path: str):
     with open(path, "w", encoding="utf-8") as f:
         f.write("\n".join(lines))
 
+async def _get_douyin_fast(url: str) -> dict:
+    """超快取得抖音影片 CDN（不需要瀏覽器，1-3 秒）"""
+    # ── 方法 1：tikwm.com（同時支援抖音/TikTok，最可靠）──────────
+    try:
+        async with httpx.AsyncClient(timeout=12, follow_redirects=True) as client:
+            r = await client.post("https://tikwm.com/api/",
+                data={"url": url, "hd": "1"},
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"})
+            d = r.json()
+            if d.get("code") == 0 and d.get("data"):
+                dat = d["data"]
+                cdn = dat.get("hdplay") or dat.get("play") or ""
+                if cdn:
+                    return {
+                        "title":     dat.get("title", "抖音影片"),
+                        "thumbnail": dat.get("origin_cover") or dat.get("cover", ""),
+                        "duration":  dat.get("duration", 0),
+                        "uploader":  (dat.get("author") or {}).get("nickname", ""),
+                        "cdn_url":   cdn, "cdn_audio_url": "",
+                    }
+    except Exception as e:
+        print(f"[douyin_fast/tikwm] {e}")
+
+    # ── 方法 2：douyin.wtf 公開 API ────────────────────────────
+    try:
+        async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
+            r = await client.get("https://api.douyin.wtf/api",
+                params={"url": url, "minimal": "false"},
+                headers={"User-Agent": "Mozilla/5.0"})
+            if r.status_code == 200:
+                d = r.json()
+                cdn = (d.get("video_data") or {}).get("nwm_video_url_HQ") or \
+                      (d.get("video_data") or {}).get("nwm_video_url") or ""
+                if cdn:
+                    return {
+                        "title":     d.get("desc", "抖音影片"),
+                        "thumbnail": d.get("cover", ""),
+                        "duration":  0,
+                        "uploader":  d.get("author", {}).get("nickname", ""),
+                        "cdn_url":   cdn, "cdn_audio_url": "",
+                    }
+    except Exception as e:
+        print(f"[douyin_fast/wtf] {e}")
+
+    return {}
+
 async def _get_douyin_info_api(aweme_id: str) -> dict:
     import sys as _sys
     if DOUYIN_LIB not in _sys.path:
@@ -806,6 +852,24 @@ async def video_info(url: str):
 
     if _is_douyin(real_url):
         from urllib.parse import quote as _q
+        # 優先：快速 API（tikwm/douyin.wtf），不需要瀏覽器，1-3 秒
+        fast = await _get_douyin_fast(real_url)
+        if fast.get("cdn_url"):
+            cdn_f = fast["cdn_url"]
+            return JSONResponse({
+                "title":         fast.get("title", "抖音影片"),
+                "thumbnail":     fast.get("thumbnail", ""),
+                "duration":      fast.get("duration", 0),
+                "uploader":      fast.get("uploader", ""),
+                "platform":      "Douyin",
+                "url":           real_url,
+                "has_video":     True,
+                "proxy_url":     f"/api/proxy-video?url={_q(cdn_f, safe='')}&referer=https://www.douyin.com/",
+                "cdn_url":       cdn_f,
+                "cdn_audio_url": "",
+                "formats":       [{"id":"best","label":"原始畫質","height":0}],
+            })
+        # fallback：Playwright（慢但可靠，保留原有邏輯不改）
         cdn_info = await _get_douyin_cdn(real_url)
         cdn = cdn_info.get("cdn_url") or ""
         proxy = f"/api/proxy-video?url={_q(cdn, safe='')}" if cdn else ""
@@ -1490,6 +1554,15 @@ async def _dl_progress(real_url: str, title: str, out_dir: Path,
     if _is_douyin(real_url):
         import tempfile as _tf
         cookie_data = _load_platform_cookies().get("douyin", [])
+
+        # ── 優先：快速 API（若預覽沒帶 hint_cdn，重新呼叫快速 API）──
+        if not hint_cdn:
+            yield {"type":"progress","pct":3,"msg":"快速解析抖音..."}
+            fast_dy = await _get_douyin_fast(real_url)
+            if fast_dy.get("cdn_url"):
+                hint_cdn = fast_dy["cdn_url"]
+                if not title or title == "影片":
+                    title = fast_dy.get("title", title)
 
         if hint_cdn:
             yield {"type":"progress","pct":5,"msg":f"下載中（{quality if quality != 'best' else '最高畫質'}）..."}
