@@ -152,7 +152,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 
 @media(max-width:500px){
   .hero-title{font-size:1rem}
-  .plt-badges{display:none}
+  .plt-badges{gap:4px}
+  .pbadge{font-size:0.65rem;padding:3px 7px}
 }
 </style>
 </head>
@@ -189,7 +190,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
         </div>
       </div>
       <div class="hero-btns">
-        <button class="hero-btn warn" id="btn-ck" onclick="toggleCookies()">🍪 Cookies</button>
+        <button class="hero-btn" id="btn-ck" onclick="toggleCookies()" style="font-size:0.72rem;padding:6px 10px;opacity:0.5">⚙️ 設定</button>
       </div>
     </div>
     <div class="plt-badges">
@@ -213,11 +214,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
       <div class="card-ico">🔗</div>
       <div>
         <div class="card-name">貼上影片連結</div>
-        <div class="card-hint">支援抖音分享文字直接貼上，自動提取網址</div>
+        <div class="card-hint">抖音 · TikTok · 快手 · B站 · YouTube · 小紅書 · 蝦皮 — 支援分享文字直接貼上</div>
       </div>
     </div>
 
-    <textarea class="url-inp" id="url-inp" placeholder="貼上影片連結或抖音/TikTok 分享文字（整段貼上即可）" rows="3"></textarea>
+    <textarea class="url-inp" id="url-inp" placeholder="貼上影片連結或抖音/TikTok 分享文字（整段貼上即可，自動解析）" rows="3" id="url-inp"></textarea>
 
     <div class="btn-row">
       <button class="btn btn-paste" onclick="pasteAndParse()">📋 貼上並解析</button>
@@ -490,6 +491,12 @@ async function dlVideo(url, title, cdnUrl, cdnAudioUrl, quality){
             toast(`✅ 已儲存：${d.filename}（${d.size_mb}MB）`);
             loadDls();
           }
+          // 下載完成後重置預覽區，讓用戶可以直接貼下一個連結
+          setTimeout(()=>{
+            resetPreview();
+            document.getElementById('url-inp').value='';
+            document.getElementById('url-inp').focus();
+          }, isMobile()?100:2200);
           resolve(true);
         } else if(d.type==='error'){
           es.close(); ov.style.display='none';
@@ -501,28 +508,46 @@ async function dlVideo(url, title, cdnUrl, cdnAudioUrl, quality){
   });
 }
 
+/* ── 重置預覽區（下載完或換新連結時呼叫）── */
+function resetPreview(){
+  urlInfo=null;
+  const prev=document.getElementById('preview');
+  prev.style.display='none';
+  const fr=document.getElementById('url-fr'); fr.style.display='none'; fr.src='';
+  const vid=document.getElementById('url-video'); vid.style.display='none'; vid.src=''; vid.pause && vid.pause();
+  document.getElementById('url-thumb').style.display='none';
+  document.getElementById('url-ph').style.display='none';
+  document.getElementById('url-title').textContent='';
+  document.getElementById('url-meta').textContent='';
+  document.getElementById('quality-sel').style.display='none';
+  document.getElementById('quality-btns').innerHTML='';
+  document.getElementById('btn-udl').disabled=true;
+  document.getElementById('btn-udl').textContent='⬇️ 去水印下載';
+  document.getElementById('url-prog').style.display='none';
+  document.getElementById('url-prog').textContent='';
+  setSt('');
+}
+
 /* ── URL 解析 ── */
+let _fetchAbort=null;
 async function fetchUrl(){
   const raw=document.getElementById('url-inp').value.trim();
   if(!raw){ toast('請先貼上網址或分享文字',true); return; }
   const url=extractUrl(raw);
   if(!url||!url.startsWith('http')){ toast('找不到有效網址，請確認貼上內容包含 http',true); return; }
   if(url!==raw) toast('已提取網址：'+url.slice(0,50)+(url.length>50?'...':''));
+
+  // 取消上一次未完成的解析
+  if(_fetchAbort){ _fetchAbort.abort(); _fetchAbort=null; }
+  _fetchAbort=new AbortController();
+
   setSt('<span class="spin"></span>讀取影片資訊...');
-  const prev=document.getElementById('preview');
-  prev.style.display='none';
-  document.getElementById('url-fr').style.display='none';
-  document.getElementById('url-fr').src='';
-  document.getElementById('url-video').style.display='none';
-  document.getElementById('url-video').src='';
-  document.getElementById('url-thumb').style.display='none';
-  document.getElementById('url-ph').style.display='none';
-  document.getElementById('btn-udl').disabled=true;
-  document.getElementById('btn-udl').textContent='⬇️ 去水印下載';
+  resetPreview();
+  document.getElementById('btn-parse').disabled=true;
   try{
-    const r=await fetch(API+'/api/video-info?url='+encodeURIComponent(url));
+    const r=await fetch(API+'/api/video-info?url='+encodeURIComponent(url),{signal:_fetchAbort.signal});
     const d=await r.json();
-    if(d.error){ setSt((d.error_hint||'讀取失敗：'+d.error)); return; }
+    if(d.error){ setSt(d.error_hint||'讀取失敗：'+d.error); return; }
     if(d.error_hint){ setSt('⚠️ '+d.error_hint); } else { setSt(''); }
     urlInfo={...d,url};
     const vid=document.getElementById('url-video');
@@ -545,25 +570,28 @@ async function fetchUrl(){
       document.getElementById('url-ph').style.display='none';
     } else if(d.proxy_url){
       vid.src=API+d.proxy_url; vid.style.display='block'; vid.controls=true;
-      thumb.style.display='none';
-      document.getElementById('url-ph').style.display='none';
+      thumb.style.display='none'; document.getElementById('url-ph').style.display='none';
       vid.onerror=_vidFallback;
     } else if(d.cdn_url){
       vid.src=d.cdn_url; vid.style.display='block'; vid.controls=true;
-      thumb.style.display='none';
-      document.getElementById('url-ph').style.display='none';
+      thumb.style.display='none'; document.getElementById('url-ph').style.display='none';
       vid.onerror=_vidFallback;
     }
     document.getElementById('url-title').textContent=d.title||d.platform||'未知標題';
     document.getElementById('url-meta').textContent=[d.uploader,d.platform,d.duration?fmtD(d.duration):''].filter(Boolean).join(' · ');
     renderFormats(d.formats||[]);
-    prev.style.display='block';
-    document.getElementById('url-prog').style.display='none';
-    const canDownload = !!(d.cdn_url || d.proxy_url || (d.formats && d.formats.length));
+    document.getElementById('preview').style.display='block';
+    const canDownload=!!(d.cdn_url||d.proxy_url||(d.formats&&d.formats.length));
     document.getElementById('btn-udl').disabled=!canDownload;
-    document.getElementById('btn-udl').textContent=canDownload?'⬇️ 去水印下載':'❌ 無法下載（需要 Cookies）';
+    document.getElementById('btn-udl').textContent=canDownload?'⬇️ 去水印下載':'❌ 無法下載（需要登入 Cookies）';
     if(!d.error_hint) setSt('');
-  }catch(e){ setSt('連線失敗：'+e.message); }
+  }catch(e){
+    if(e.name==='AbortError') return;
+    setSt('連線失敗：'+e.message);
+  }finally{
+    document.getElementById('btn-parse').disabled=false;
+    _fetchAbort=null;
+  }
 }
 
 async function pasteAndParse(){
@@ -572,8 +600,27 @@ async function pasteAndParse(){
     if(!text){ toast('剪貼簿是空的',true); return; }
     document.getElementById('url-inp').value=text;
     fetchUrl();
-  }catch(e){ toast('請允許剪貼簿權限，或直接手動貼上後點解析',true); }
+  }catch(e){
+    // 剪貼簿授權失敗：焦點到輸入框讓用戶手動 Ctrl+V
+    document.getElementById('url-inp').focus();
+    toast('請直接在輸入框貼上（Ctrl+V），再點解析',false);
+  }
 }
+
+/* 自動貼上解析：用戶在輸入框手動貼上時自動觸發 */
+let _autoPasteTimer=null;
+document.addEventListener('DOMContentLoaded',function(){
+  const inp=document.getElementById('url-inp');
+  inp.addEventListener('paste',function(e){
+    clearTimeout(_autoPasteTimer);
+    _autoPasteTimer=setTimeout(function(){
+      const val=inp.value.trim();
+      if(val && val.startsWith('http') || val.includes('http')){
+        fetchUrl();
+      }
+    }, 300);
+  });
+});
 
 /* ── 下載 URL ── */
 async function dlUrl(){
@@ -707,7 +754,6 @@ async function delCookies(){
 
 /* ── 初始化 ── */
 loadDls();
-(async function(){ try{ const r=await fetch(API+'/api/cookies/status'); const d=await r.json(); const total=Object.values(d).reduce((a,b)=>a+b,0); const btn=document.getElementById('btn-ck'); if(total>0){ btn.style.background='rgba(13,148,136,.15)'; btn.style.borderColor='rgba(13,148,136,.4)'; btn.style.color='#5eead4'; btn.className='hero-btn'; } }catch(e){} })();
 </script>
 </body>
 </html>
