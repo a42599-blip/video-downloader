@@ -92,6 +92,59 @@ LUX_DOMAINS = ("bilibili.com", "b23.tv", "iqiyi.com", "youku.com",
 def _is_lux_platform(url: str) -> bool:
     return LUX_PATH.exists() and any(d in url for d in LUX_DOMAINS)
 
+# ── Invidious 公開實例（YouTube 替代前端，雲端 IP 不被封）──────
+INVIDIOUS_INSTANCES = [
+    "https://invidious.io.lol",
+    "https://yewtu.be",
+    "https://inv.tux.pizza",
+    "https://invidious.privacyredirect.com",
+    "https://iv.datura.network",
+    "https://invidious.nerdvpn.de",
+]
+
+def _extract_youtube_id(url: str) -> str:
+    m = re.search(r'(?:v=|youtu\.be/|embed/|shorts/)([A-Za-z0-9_-]{11})', url)
+    return m.group(1) if m else ""
+
+async def _get_youtube_via_invidious(url: str) -> dict:
+    """透過 Invidious API 取得 YouTube 影片直連 URL（繞過雲端 IP 封鎖）"""
+    vid_id = _extract_youtube_id(url)
+    if not vid_id:
+        return {}
+    for instance in INVIDIOUS_INSTANCES:
+        try:
+            async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
+                resp = await client.get(f"{instance}/api/v1/videos/{vid_id}",
+                                        params={"fields": "title,author,lengthSeconds,videoThumbnails,formatStreams,adaptiveFormats"})
+                if resp.status_code != 200:
+                    continue
+                data = resp.json()
+                title     = data.get("title", "")
+                author    = data.get("author", "")
+                duration  = data.get("lengthSeconds", 0)
+                thumbs    = data.get("videoThumbnails", [])
+                thumbnail = next((t["url"] for t in thumbs if t.get("quality") in ("high","medium","default")), "")
+                # formatStreams = 已合併音視頻 (mp4)
+                fmts = data.get("formatStreams", [])
+                if not fmts:
+                    continue
+                # 按解析度排序，取最高
+                def _res(f): return int(re.search(r'(\d+)p',f.get("resolution","0p")).group(1)) if re.search(r'(\d+)p',f.get("resolution","0p")) else 0
+                fmts_sorted = sorted(fmts, key=_res, reverse=True)
+                best = fmts_sorted[0]
+                cdn_url = best.get("url","")
+                if not cdn_url:
+                    continue
+                formats = [{"id": f.get("itag",""), "label": f.get("resolution",""), "height": _res(f)} for f in fmts_sorted]
+                print(f"[invidious] {instance} OK vid={vid_id}")
+                return {"title": title, "uploader": author, "duration": duration,
+                        "thumbnail": thumbnail, "cdn_url": cdn_url, "formats": formats,
+                        "platform": "YouTube", "_source": "invidious"}
+        except Exception as ex:
+            print(f"[invidious] {instance} 失敗: {ex}")
+            continue
+    return {}
+
 DOWNLOAD_DIR.mkdir(exist_ok=True)
 
 def extract_url_from_text(text: str) -> str:
@@ -872,15 +925,37 @@ async def video_info(url: str):
         except Exception:
             pass
 
+    # ── YouTube：優先走 Invidious（繞過雲端 IP 封鎖）─────────────
+    if "youtube.com" in real_url or "youtu.be" in real_url:
+        from urllib.parse import quote as _qyt
+        inv_data = await _get_youtube_via_invidious(real_url)
+        if inv_data.get("cdn_url"):
+            cdn_yt = inv_data["cdn_url"]
+            proxy_yt = f"/api/proxy-video?url={_qyt(cdn_yt, safe='')}&referer=https://www.youtube.com/"
+            return JSONResponse({
+                "title":     inv_data.get("title",""),
+                "thumbnail": inv_data.get("thumbnail",""),
+                "duration":  inv_data.get("duration",0),
+                "uploader":  inv_data.get("uploader",""),
+                "platform":  "YouTube",
+                "url":       real_url,
+                "has_video": True,
+                "proxy_url": proxy_yt,
+                "cdn_url":   cdn_yt,
+                "cdn_audio_url": "",
+                "formats":   inv_data.get("formats",[]),
+            })
+        # Invidious 全失敗 → fallback yt-dlp Android
+
     def _info():
         from urllib.parse import urlparse as _up
         opts = {
             "quiet": True, "no_warnings": True, "skip_download": True,
             "http_headers": {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"},
         }
-        # YouTube：用 Android 客戶端繞過雲端 IP 封鎖
+        # YouTube：Android 客戶端備用（Invidious 已優先嘗試）
         if "youtube.com" in real_url or "youtu.be" in real_url:
-            opts["extractor_args"] = {"youtube": {"player_client": ["android", "web"]}}
+            opts["extractor_args"] = {"youtube": {"player_client": ["android", "android_embedded", "web"]}}
         import tempfile, os as _os
         cookies_list = _get_cookies_for_url(real_url)
         _tmp_cookie_file = None
@@ -1641,6 +1716,36 @@ async def _dl_progress(real_url: str, title: str, out_dir: Path,
             return
         yield {"type":"progress","pct":2,"msg":"CDN URL 已過期，改用 yt-dlp 重新下載..."}
 
+    # ══ YouTube：Invidious 優先（繞過雲端封鎖）══════════════════
+    if "youtube.com" in real_url or "youtu.be" in real_url:
+        yield {"type":"progress","pct":5,"msg":"透過 Invidious 取得 YouTube 影片..."}
+        inv = await _get_youtube_via_invidious(real_url)
+        if inv.get("cdn_url"):
+            yield {"type":"progress","pct":10,"msg":"開始下載 YouTube 影片..."}
+            safe_yt = re.sub(r'[\\/:*?"<>|]', '_', inv.get("title") or title)[:60]
+            fpath_yt = out_dir / f"{safe_yt}.mp4"
+            yt_h = {"User-Agent":"Mozilla/5.0","Referer":"https://www.youtube.com/"}
+            async for evt in httpx_dl(inv["cdn_url"], fpath_yt, yt_h, 10, 95): yield evt
+            sz_yt = fpath_yt.stat().st_size if fpath_yt.exists() else 0
+            if sz_yt > 50000:
+                yield {"type":"done","filename":fpath_yt.name,"saved_dir":str(out_dir),"size_mb":round(sz_yt/1024/1024,1)}
+                return
+        # Invidious 失敗 → yt-dlp Android 備用
+        yield {"type":"progress","pct":5,"msg":"Invidious 失敗，改用 yt-dlp..."}
+        safe_yt2 = re.sub(r'[\\/:*?"<>|]', '_', title)[:60]
+        opts_yt = {"format":"bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+                   "outtmpl":str(out_dir/f"{safe_yt2}.%(ext)s"),"quiet":True,"no_warnings":True,
+                   "merge_output_format":"mp4","concurrent_fragment_downloads":8,"updatetime":False,
+                   "postprocessor_args":{"default":["-map_metadata","-1"]},
+                   "extractor_args":{"youtube":{"player_client":["android","android_embedded","web"]}}}
+        res_yt, err_yt = [], []
+        async for evt in ytdlp_dl(opts_yt, real_url, res_yt, err_yt): yield evt
+        if res_yt and Path(res_yt[0]).exists() and Path(res_yt[0]).stat().st_size > 50000:
+            yield {"type":"done","filename":Path(res_yt[0]).name,"saved_dir":str(out_dir),"size_mb":round(Path(res_yt[0]).stat().st_size/1024/1024,1)}
+        else:
+            yield {"type":"error","message":"YouTube 下載失敗（"+(err_yt[0] if err_yt else "未知錯誤")+"）"}
+        return
+
     # ══ 其他平台（yt-dlp）════════════════════════════════════════
     yield {"type":"progress","pct":2,"msg":"初始化下載..."}
     safe = re.sub(r'[\\/:*?"<>|]', '_', title)[:60]
@@ -1655,9 +1760,6 @@ async def _dl_progress(real_url: str, title: str, out_dir: Path,
             "merge_output_format":"mp4","concurrent_fragment_downloads":8,
             "updatetime":False,
             "postprocessor_args":{"default":["-map_metadata","-1"]}}
-    # YouTube：Android 客戶端繞過雲端 IP 封鎖
-    if "youtube.com" in real_url or "youtu.be" in real_url:
-        opts["extractor_args"] = {"youtube": {"player_client": ["android", "web"]}}
     res2, err2 = [], []
     async for evt in ytdlp_dl(opts, real_url, res2, err2): yield evt
     if err2: yield {"type":"error","message":err2[0]}; return
