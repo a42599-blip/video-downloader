@@ -161,7 +161,7 @@ async def _get_bilibili_direct(url: str) -> dict:
         return {}
     params = {"bvid": bvid_m.group()} if bvid_m else {"aid": aid_m.group(1)}
     try:
-        async with httpx.AsyncClient(timeout=10, headers=_BILI_HEADERS) as client:
+        async with httpx.AsyncClient(timeout=20, headers=_BILI_HEADERS) as client:
             # Step 1: 取元數據
             meta = (await client.get("https://api.bilibili.com/x/web-interface/view", params=params)).json()
             if meta.get("code") != 0:
