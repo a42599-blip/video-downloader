@@ -147,6 +147,95 @@ async def _get_youtube_via_invidious(url: str) -> dict:
 
 DOWNLOAD_DIR.mkdir(exist_ok=True)
 
+# ── B站直連 API（繞過 yt-dlp 地區限制）────────────────────────────
+_BILI_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Referer": "https://www.bilibili.com/",
+}
+
+async def _get_bilibili_direct(url: str) -> dict:
+    """直接打 Bilibili API 取得影片資訊和 CDN URL，不走 yt-dlp"""
+    bvid_m = re.search(r'BV[A-Za-z0-9]+', url)
+    aid_m  = re.search(r'av(\d+)', url, re.I)
+    if not bvid_m and not aid_m:
+        return {}
+    params = {"bvid": bvid_m.group()} if bvid_m else {"aid": aid_m.group(1)}
+    try:
+        async with httpx.AsyncClient(timeout=10, headers=_BILI_HEADERS) as client:
+            # Step 1: 取元數據
+            meta = (await client.get("https://api.bilibili.com/x/web-interface/view", params=params)).json()
+            if meta.get("code") != 0:
+                return {}
+            d = meta["data"]
+            bvid  = d.get("bvid", "")
+            cid   = d.get("cid", 0)
+            title = d.get("title", "")
+            thumb = d.get("pic", "")
+            dur   = d.get("duration", 0)
+            author = (d.get("owner") or {}).get("name", "")
+            embed_url = f"https://player.bilibili.com/player.html?bvid={bvid}&cid={cid}&high_quality=1&danmaku=0"
+
+            # Step 2: 取播放 URL（qn=80=1080P，qn=64=720P，不登入最高通常 480P）
+            for qn in [80, 64, 32, 16]:
+                pu = (await client.get(
+                    "https://api.bilibili.com/x/player/playurl",
+                    params={"bvid": bvid, "cid": cid, "qn": qn, "fnval": 1, "platform": "pc"}
+                )).json()
+                if pu.get("code") != 0:
+                    continue
+                durls = (pu.get("data") or {}).get("durl", [])
+                if durls:
+                    cdn_url = durls[0].get("url", "")
+                    if cdn_url:
+                        label = {80:"1080P", 64:"720P HD", 32:"480P", 16:"360P"}.get(qn, f"{qn}P")
+                        return {
+                            "title": title, "thumbnail": thumb, "duration": dur,
+                            "uploader": author, "platform": "Bilibili",
+                            "cdn_url": cdn_url, "cdn_audio_url": "",
+                            "embed_url": embed_url,
+                            "formats": [{"id": str(qn), "label": label, "height": 0}],
+                        }
+            # 拿不到直連，至少返回 embed
+            return {"title": title, "thumbnail": thumb, "duration": dur,
+                    "uploader": author, "platform": "Bilibili",
+                    "cdn_url": "", "embed_url": embed_url,
+                    "formats": [{"id": "embed", "label": "嵌入播放", "height": 0}]}
+    except Exception as ex:
+        print(f"[bilibili_direct] {ex}")
+        return {}
+
+# ── 小紅書直連（繞過 yt-dlp 問題）────────────────────────────────
+async def _get_xhs_direct(url: str) -> dict:
+    """解析小紅書影片，先追蹤短鏈後取 OG meta 裡的影片 URL"""
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+            "Referer": "https://www.xiaohongshu.com/",
+        }
+        async with httpx.AsyncClient(timeout=15, follow_redirects=True, headers=headers) as client:
+            r = await client.get(url)
+            final_url = str(r.url)
+            html = r.text
+        # 從 meta 取影片 URL
+        video_m = re.search(r'"contentUrl"\s*:\s*"([^"]+\.mp4[^"]*)"', html)
+        if not video_m:
+            video_m = re.search(r'<video[^>]+src="([^"]+)"', html)
+        if not video_m:
+            video_m = re.search(r'"url"\s*:\s*"(https://[^"]+\.mp4[^"]*)"', html)
+        title_m  = re.search(r'<meta[^>]+og:title[^>]+content="([^"]+)"', html)
+        thumb_m  = re.search(r'<meta[^>]+og:image[^>]+content="([^"]+)"', html)
+        if video_m:
+            return {
+                "title":     (title_m.group(1) if title_m else "小紅書影片"),
+                "thumbnail": (thumb_m.group(1) if thumb_m else ""),
+                "cdn_url":   video_m.group(1),
+                "cdn_audio_url": "",
+                "duration":  0, "uploader": "",
+            }
+    except Exception as ex:
+        print(f"[xhs_direct] {ex}")
+    return {}
+
 def extract_url_from_text(text: str) -> str:
     m = re.search(r'https?://[^\s一-鿿＀-￯　-〿⺀-⻿]+', text)
     if m:
@@ -940,52 +1029,47 @@ async def video_info(url: str):
                 "formats": [{"id": "best", "label": "原始畫質（無浮水印）", "height": 0}],
             })
 
+    # ── B站：直打 Bilibili API（雲端/本機都能用，不靠 yt-dlp）─────
     is_bilibili = "bilibili.com" in real_url or "b23.tv" in real_url
-    if _is_lux_platform(real_url):
-        if is_bilibili:
-            bvid_m = re.search(r'BV\w+', real_url)
-            if bvid_m:
-                bvid = bvid_m.group()
-                embed_url = f"https://player.bilibili.com/player.html?bvid={bvid}&high_quality=1&danmaku=0"
-                bili_title, bili_thumb, bili_dur, bili_author = "", "", 0, ""
-                try:
-                    async with httpx.AsyncClient(timeout=8) as c:
-                        resp = await c.get("https://api.bilibili.com/x/web-interface/view",
-                                           params={"bvid": bvid},
-                                           headers={"User-Agent":"Mozilla/5.0","Referer":"https://www.bilibili.com/"})
-                        d = resp.json()
-                        ddata = d.get("data") or {}
-                        bili_title  = ddata.get("title", "")
-                        bili_thumb  = ddata.get("pic", "")
-                        bili_dur    = ddata.get("duration", 0)
-                        bili_author = (ddata.get("owner") or {}).get("name", "")
-                        if bili_thumb.startswith("//"): bili_thumb = "https:" + bili_thumb
-                        elif bili_thumb.startswith("http://"): bili_thumb = "https" + bili_thumb[4:]
-                except Exception:
-                    pass
-                bili_fmts: list = []
-                try:
-                    lux_info = await loop.run_in_executor(executor, _lux_info, real_url)
-                    bili_fmts = lux_info.get("formats") or []
-                    if not bili_title:
-                        bili_title = lux_info.get("title", "")
-                except Exception:
-                    pass
-                if not bili_fmts:
-                    bili_fmts = [{"id":"best","label":"最高畫質","height":0}]
-                return JSONResponse({
-                    "title": bili_title or bvid, "thumbnail": bili_thumb,
-                    "duration": bili_dur, "uploader": bili_author,
-                    "platform": "Bilibili", "url": real_url,
-                    "formats": bili_fmts, "embed_url": embed_url,
-                })
+    if is_bilibili:
+        bili = await _get_bilibili_direct(real_url)
+        if bili.get("title"):
+            from urllib.parse import quote as _qb
+            cdn_b = bili.get("cdn_url","")
+            prx_b = f"/api/proxy-video?url={_qb(cdn_b,safe='')}&referer=https://www.bilibili.com/" if cdn_b else ""
+            return JSONResponse({
+                "title":     bili["title"],     "thumbnail": bili.get("thumbnail",""),
+                "duration":  bili.get("duration",0), "uploader": bili.get("uploader",""),
+                "platform":  "Bilibili",        "url":       real_url,
+                "has_video": bool(cdn_b),        "proxy_url": prx_b,
+                "cdn_url":   cdn_b,              "cdn_audio_url": "",
+                "embed_url": bili.get("embed_url",""),
+                "formats":   bili.get("formats",[{"id":"best","label":"最高畫質","height":0}]),
+            })
+
+    # ── 小紅書：直解 HTML（繞過 yt-dlp 格式問題）──────────────────
+    if "xiaohongshu.com" in real_url or "xhslink.com" in real_url:
+        xhs = await _get_xhs_direct(real_url)
+        if xhs.get("cdn_url"):
+            from urllib.parse import quote as _qx
+            cdn_x = xhs["cdn_url"]
+            prx_x = f"/api/proxy-video?url={_qx(cdn_x,safe='')}&referer=https://www.xiaohongshu.com/"
+            return JSONResponse({
+                "title": xhs.get("title","小紅書影片"), "thumbnail": xhs.get("thumbnail",""),
+                "duration": 0, "uploader": "", "platform": "XiaoHongShu", "url": real_url,
+                "has_video": True, "proxy_url": prx_x, "cdn_url": cdn_x, "cdn_audio_url": "",
+                "formats": [{"id":"best","label":"原始畫質","height":0}],
+            })
+
+    # Lux（本機 Windows 專用，雲端不走這裡）
+    if _is_lux_platform(real_url) and not is_bilibili:
         try:
             info = await loop.run_in_executor(executor, _lux_info, real_url)
             if info and info.get("title"):
-                bili_fmts = info.get("formats") or []
                 return JSONResponse({"title": info["title"], "thumbnail": "",
-                                     "duration": info.get("duration", 0), "uploader": info.get("uploader", ""),
-                                     "platform": "Lux", "url": real_url, "formats": bili_fmts})
+                                     "duration": info.get("duration",0), "uploader": info.get("uploader",""),
+                                     "platform": "Lux", "url": real_url,
+                                     "formats": info.get("formats",[])})
         except Exception:
             pass
 
@@ -1724,7 +1808,62 @@ async def _dl_progress(real_url: str, title: str, out_dir: Path,
             yield {"type": "error", "message": f"蝦皮下載失敗：{ex}"}
         return
 
-    # ══ B站 / Lux ════════════════════════════════════════════════
+    # ══ B站：直打 API 下載（雲端可用，不靠 yt-dlp/Lux）═══════════
+    if "bilibili.com" in real_url or "b23.tv" in real_url:
+        yield {"type":"progress","pct":5,"msg":"解析 B站影片..."}
+        bili_h = {**_BILI_HEADERS}
+        cdn_b = hint_cdn
+        use_title = title
+        if not cdn_b:
+            bili = await _get_bilibili_direct(real_url)
+            cdn_b     = bili.get("cdn_url","")
+            use_title = bili.get("title") or title
+        if cdn_b:
+            yield {"type":"progress","pct":10,"msg":"下載 B站影片..."}
+            safe_b = re.sub(r'[\\/:*?"<>|]', '_', use_title)[:60]
+            fpath_b = out_dir / f"{safe_b}.mp4"
+            async for evt in httpx_dl(cdn_b, fpath_b, bili_h, 10, 95): yield evt
+            sz_b = fpath_b.stat().st_size if fpath_b.exists() else 0
+            if sz_b > 50000:
+                yield {"type":"done","filename":fpath_b.name,"saved_dir":str(out_dir),"size_mb":round(sz_b/1024/1024,1)}
+                return
+        yield {"type":"error","message":"B站下載失敗（影片可能需要登入或地區限制）"}
+        return
+
+    # ══ 小紅書：直解 HTML 下載 ══════════════════════════════════
+    if "xiaohongshu.com" in real_url or "xhslink.com" in real_url:
+        yield {"type":"progress","pct":5,"msg":"解析小紅書影片..."}
+        cdn_x = hint_cdn
+        use_title_x = title
+        if not cdn_x:
+            xhs = await _get_xhs_direct(real_url)
+            cdn_x = xhs.get("cdn_url","")
+            use_title_x = xhs.get("title") or title
+        if cdn_x:
+            yield {"type":"progress","pct":10,"msg":"下載小紅書影片..."}
+            safe_x = re.sub(r'[\\/:*?"<>|]', '_', use_title_x)[:60]
+            fpath_x = out_dir / f"{safe_x}.mp4"
+            xhs_h = {"User-Agent":"Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
+                     "Referer":"https://www.xiaohongshu.com/"}
+            async for evt in httpx_dl(cdn_x, fpath_x, xhs_h, 10, 95): yield evt
+            sz_x = fpath_x.stat().st_size if fpath_x.exists() else 0
+            if sz_x > 50000:
+                yield {"type":"done","filename":fpath_x.name,"saved_dir":str(out_dir),"size_mb":round(sz_x/1024/1024,1)}
+                return
+        # fallback yt-dlp
+        yield {"type":"progress","pct":5,"msg":"改用 yt-dlp 解析小紅書..."}
+        safe_x2 = re.sub(r'[\\/:*?"<>|]', '_', title)[:60]
+        opts_x = {"format":"best[ext=mp4]/best","outtmpl":str(out_dir/f"{safe_x2}.%(ext)s"),
+                  "quiet":True,"no_warnings":True,"merge_output_format":"mp4"}
+        res_x, err_x = [], []
+        async for evt in ytdlp_dl(opts_x, real_url, res_x, err_x): yield evt
+        if res_x and Path(res_x[0]).exists() and Path(res_x[0]).stat().st_size > 50000:
+            yield {"type":"done","filename":Path(res_x[0]).name,"saved_dir":str(out_dir),"size_mb":round(Path(res_x[0]).stat().st_size/1024/1024,1)}
+        else:
+            yield {"type":"error","message":"小紅書下載失敗，請確認連結有效"}
+        return
+
+    # ══ B站 / Lux（本機 Windows 備用）═══════════════════════════
     if _is_lux_platform(real_url):
         yield {"type":"progress","pct":5,"msg":"啟動 Lux..."}
         before = set(out_dir.glob("*"))
