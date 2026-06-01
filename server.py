@@ -760,6 +760,28 @@ async def video_info(url: str):
 
     if _is_kuaishou(real_url):
         from urllib.parse import quote as _q
+        loop_ks = asyncio.get_event_loop()
+        # 先用 yt-dlp（不需要瀏覽器，雲端可用）
+        def _ks_ytdlp():
+            opts_ks = {"quiet":True,"no_warnings":True,"skip_download":True,
+                       "http_headers":{"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}}
+            with yt_dlp.YoutubeDL(opts_ks) as ydl:
+                return ydl.extract_info(real_url, download=False)
+        try:
+            ks_info = await asyncio.wait_for(loop_ks.run_in_executor(executor, _ks_ytdlp), timeout=15)
+            if ks_info and ks_info.get("url"):
+                ks_cdn = ks_info.get("url","")
+                ks_proxy = f"/api/proxy-video?url={_q(ks_cdn, safe='')}&referer=https://www.kuaishou.com/" if ks_cdn else ""
+                return JSONResponse({
+                    "title": ks_info.get("title","快手影片"), "thumbnail": ks_info.get("thumbnail",""),
+                    "duration": ks_info.get("duration",0), "uploader": ks_info.get("uploader",""),
+                    "platform":"Kuaishou","url":real_url,"has_video":bool(ks_cdn),
+                    "proxy_url":ks_proxy,"cdn_url":ks_cdn,
+                    "formats":[{"id":"best","label":"原始畫質","height":0}],
+                })
+        except Exception:
+            pass
+        # fallback：Playwright（本機可用）
         cdn_info = await _get_kuaishou_cdn(real_url)
         cdn = cdn_info.get("cdn_url") or ""
         proxy = f"/api/proxy-video?url={_q(cdn, safe='')}&referer=https://www.kuaishou.com/" if cdn else ""
@@ -844,6 +866,9 @@ async def video_info(url: str):
             "quiet": True, "no_warnings": True, "skip_download": True,
             "http_headers": {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"},
         }
+        # YouTube：用 Android 客戶端繞過雲端 IP 封鎖
+        if "youtube.com" in real_url or "youtu.be" in real_url:
+            opts["extractor_args"] = {"youtube": {"player_client": ["android", "web"]}}
         import tempfile, os as _os
         cookies_list = _get_cookies_for_url(real_url)
         _tmp_cookie_file = None
@@ -1467,28 +1492,47 @@ async def _dl_progress(real_url: str, title: str, out_dir: Path,
     # ══ 快手 ══════════════════════════════════════════════════════
     if _is_kuaishou(real_url):
         yield {"type":"progress","pct":5,"msg":"解析快手影片..."}
-        try:
-            cdn = hint_cdn
-            use_title = title
-            if not cdn:
-                ks_info = await _get_kuaishou_cdn(real_url)
-                cdn = ks_info.get("cdn_url") or ""
-                use_title = ks_info.get("title") or title
-            if not cdn:
-                yield {"type":"error","message":"無法取得快手影片 CDN（可能需要登入，請在設定頁面貼上快手 Cookies）"}
-                return
-            safe = re.sub(r'[\\/:*?"<>|]', '_', use_title)[:60]
+        ks_h = {"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "Referer":"https://www.kuaishou.com/"}
+
+        # 優先：hint_cdn（預覽時已取得）
+        if hint_cdn:
+            safe = re.sub(r'[\\/:*?"<>|]', '_', title)[:60]
             fpath = out_dir / f"{safe}.mp4"
-            ks_h = {"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                    "Referer":"https://www.kuaishou.com/"}
             yield {"type":"progress","pct":10,"msg":"下載快手影片..."}
-            async for evt in httpx_dl(cdn, fpath, ks_h, 10, 95): yield evt
-            sz = fpath.stat().st_size if fpath.exists() else 0
-            if sz > 50000:
-                yield {"type":"done","filename":fpath.name,"saved_dir":str(out_dir),
-                       "size_mb":round(sz/1024/1024,1)}
+            async for evt in httpx_dl(hint_cdn, fpath, ks_h, 10, 95): yield evt
+            if fpath.exists() and fpath.stat().st_size > 50000:
+                yield {"type":"done","filename":fpath.name,"saved_dir":str(out_dir),"size_mb":round(fpath.stat().st_size/1024/1024,1)}
                 return
-            yield {"type":"error","message":"下載失敗，CDN 連結可能已過期，請重新解析"}
+
+        # yt-dlp（雲端可用，不需要瀏覽器）
+        yield {"type":"progress","pct":8,"msg":"嘗試 yt-dlp 解析快手..."}
+        res_ks, err_ks = [], []
+        safe = re.sub(r'[\\/:*?"<>|]', '_', title)[:60]
+        opts_ks = {"format":"best[ext=mp4]/best","outtmpl":str(out_dir/f"{safe}.%(ext)s"),
+                   "quiet":True,"no_warnings":True,"merge_output_format":"mp4"}
+        async for evt in ytdlp_dl(opts_ks, real_url, res_ks, err_ks): yield evt
+        if res_ks and Path(res_ks[0]).exists() and Path(res_ks[0]).stat().st_size > 50000:
+            yield {"type":"done","filename":Path(res_ks[0]).name,"saved_dir":str(out_dir),"size_mb":round(Path(res_ks[0]).stat().st_size/1024/1024,1)}
+            return
+
+        # fallback：Playwright（本機）
+        yield {"type":"progress","pct":5,"msg":"啟動瀏覽器解析快手..."}
+        try:
+            ks_info = await _get_kuaishou_cdn(real_url)
+            cdn = ks_info.get("cdn_url") or ""
+            use_title = ks_info.get("title") or title
+            if not cdn:
+                yield {"type":"error","message":"無法取得快手影片（雲端限制，建議貼入快手 Cookies）"}
+                return
+            safe2 = re.sub(r'[\\/:*?"<>|]', '_', use_title)[:60]
+            fpath2 = out_dir / f"{safe2}.mp4"
+            async for evt in httpx_dl(cdn, fpath2, ks_h, 10, 95): yield evt
+            sz = fpath2.stat().st_size if fpath2.exists() else 0
+            if sz > 50000:
+                yield {"type":"done","filename":fpath2.name,"saved_dir":str(out_dir),"size_mb":round(sz/1024/1024,1)}
+                return
+            yield {"type":"error","message":"快手下載失敗，請重新解析"}
         except Exception as ex:
             yield {"type":"error","message":f"快手下載失敗：{ex}"}
         return
@@ -1599,6 +1643,9 @@ async def _dl_progress(real_url: str, title: str, out_dir: Path,
             "merge_output_format":"mp4","concurrent_fragment_downloads":8,
             "updatetime":False,
             "postprocessor_args":{"default":["-map_metadata","-1"]}}
+    # YouTube：Android 客戶端繞過雲端 IP 封鎖
+    if "youtube.com" in real_url or "youtu.be" in real_url:
+        opts["extractor_args"] = {"youtube": {"player_client": ["android", "web"]}}
     res2, err2 = [], []
     async for evt in ytdlp_dl(opts, real_url, res2, err2): yield evt
     if err2: yield {"type":"error","message":err2[0]}; return
