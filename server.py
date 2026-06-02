@@ -846,43 +846,7 @@ async def _download_from_cdn(cdn_url: str, out_dir: Path, title: str,
 
 
 # ── Cookies 管理 ──────────────────────────────────────────
-@app.post("/api/cookies/save")
-async def save_cookies(platform: str = Form(...), cookies_json: str = Form(...)):
-    try:
-        cookies = json.loads(cookies_json)
-        if not isinstance(cookies, list):
-            return JSONResponse({"ok": False, "error": "格式必須是 JSON 陣列"})
-        normalized = []
-        for c in cookies:
-            if not c.get("name") or not c.get("value"):
-                continue
-            normalized.append({
-                "name": c["name"], "value": c["value"],
-                "domain": c.get("domain", ""),
-                "path": c.get("path", "/"),
-                "secure": c.get("secure", False),
-                "httpOnly": c.get("httpOnly", False),
-            })
-        data = _load_platform_cookies()
-        data[platform.lower()] = normalized
-        COOKIES_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-        return JSONResponse({"ok": True, "count": len(normalized)})
-    except Exception as e:
-        return JSONResponse({"ok": False, "error": str(e)})
 
-@app.get("/api/cookies/status")
-def cookies_status():
-    data = _load_platform_cookies()
-    return JSONResponse({
-        plat: len(data.get(plat, [])) for plat in ["douyin", "tiktok"]
-    })
-
-@app.delete("/api/cookies/{platform}")
-def delete_cookies(platform: str):
-    data = _load_platform_cookies()
-    data.pop(platform.lower(), None)
-    COOKIES_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-    return JSONResponse({"ok": True})
 
 # ── 首頁 ──────────────────────────────────────────────────
 @app.get("/")
