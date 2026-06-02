@@ -154,8 +154,11 @@ _BILI_HEADERS = {
     "Origin": "https://www.bilibili.com",
     "Accept": "application/json, text/plain, */*",
     "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-    "Accept-Encoding": "gzip, deflate, br",
 }
+_BILI_COOKIE = "buvid3=local-12345678; b_nut=1700000000; b_lsid=ABC123;"
+
+import uuid as _uuid
+_BILI_HEADERS_WITH_COOKIE = {**_BILI_HEADERS, "Cookie": _BILI_COOKIE + f" buvid4={_uuid.uuid4().hex[:16]};"}
 
 async def _get_bilibili_direct(url: str) -> dict:
     """直接打 Bilibili API 取得影片資訊和 CDN URL，不走 yt-dlp"""
@@ -165,7 +168,7 @@ async def _get_bilibili_direct(url: str) -> dict:
         return {}
     params = {"bvid": bvid_m.group()} if bvid_m else {"aid": aid_m.group(1)}
     try:
-        async with httpx.AsyncClient(timeout=20, headers=_BILI_HEADERS) as client:
+        async with httpx.AsyncClient(timeout=20, headers=_BILI_HEADERS_WITH_COOKIE) as client:
             # Step 1: 取元數據（嘗試多個 API 端點）
             meta = None
             for api_url in ["https://api.bilibili.com/x/web-interface/view", "https://api.bilibili.com/x/web-interface/view/detail"]:
