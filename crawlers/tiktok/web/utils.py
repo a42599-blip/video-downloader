@@ -67,7 +67,7 @@ class TokenManager:
         }
 
         transport = httpx.HTTPTransport(retries=5)
-        with httpx.Client(transport=transport, proxies=cls.proxies) as client:
+        with httpx.Client(transport=transport) as client:
             try:
                 response = client.post(
                     cls.token_conf["url"], headers=headers, content=payload
@@ -118,7 +118,7 @@ class TokenManager:
         生成请求必带的ttwid (Generate the essential ttwid for requests)
         """
         transport = httpx.HTTPTransport(retries=5)
-        with httpx.Client(transport=transport, proxies=cls.proxies) as client:
+        with httpx.Client(transport=transport) as client:
             try:
                 response = client.post(
                     cls.ttwid_conf["url"],
@@ -166,7 +166,7 @@ class TokenManager:
         生成请求必带的odin_tt (Generate the essential odin_tt for requests)
         """
         transport = httpx.HTTPTransport(retries=5)
-        with httpx.Client(transport=transport, proxies=cls.proxies) as client:
+        with httpx.Client(transport=transport) as client:
             try:
                 response = client.get(cls.odin_tt_conf["url"])
                 response.raise_for_status()
@@ -272,7 +272,7 @@ class SecUserIdFetcher:
 
         transport = httpx.AsyncHTTPTransport(retries=5)
         async with httpx.AsyncClient(
-                transport=transport, proxies=TokenManager.proxies, timeout=10
+                transport=transport, timeout=10
         ) as client:
             try:
                 response = await client.get(url, follow_redirects=True)
@@ -363,7 +363,7 @@ class SecUserIdFetcher:
 
         transport = httpx.AsyncHTTPTransport(retries=5)
         async with httpx.AsyncClient(
-                transport=transport, proxies=TokenManager.proxies, timeout=10
+                transport=transport, timeout=10
         ) as client:
             try:
                 response = await client.get(url, follow_redirects=True)
@@ -477,7 +477,7 @@ class AwemeIdFetcher:
         print(f"输入的URL需要重定向: {url}")
         transport = httpx.AsyncHTTPTransport(retries=10)
         async with httpx.AsyncClient(
-                transport=transport, proxies=TokenManager.proxies, timeout=10
+                transport=transport, timeout=10
         ) as client:
             try:
                 response = await client.get(url, follow_redirects=True)
