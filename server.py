@@ -387,7 +387,7 @@ async def _get_douyin_fast(url: str) -> dict:
     """超快取得抖音影片 CDN（不需要瀏覽器，1-3 秒）"""
     # ── 方法 1：tikwm.com（同時支援抖音/TikTok，最可靠）──────────
     try:
-        async with httpx.AsyncClient(timeout=12, follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=8, follow_redirects=True) as client:
             r = await client.post("https://tikwm.com/api/",
                 data={"url": url, "hd": "1"},
                 headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"})
@@ -408,7 +408,7 @@ async def _get_douyin_fast(url: str) -> dict:
 
     # ── 方法 2：douyin.wtf 公開 API ────────────────────────────
     try:
-        async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=6, follow_redirects=True) as client:
             r = await client.get("https://api.douyin.wtf/api",
                 params={"url": url, "minimal": "false"},
                 headers={"User-Agent": "Mozilla/5.0"})
@@ -429,7 +429,7 @@ async def _get_douyin_fast(url: str) -> dict:
 
     # ── 方法 3：snaptik.app 公開 API（備用）────────────────────
     try:
-        async with httpx.AsyncClient(timeout=12, follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=6, follow_redirects=True) as client:
             r = await client.post("https://snaptik.app/action-2025.php",
                 data={"url": url, "lang": "en"},
                 headers={
@@ -1096,7 +1096,7 @@ async def video_info(url: str):
 
     if _is_douyin(real_url):
         from urllib.parse import quote as _q
-        # 優先：快速 API（tikwm/douyin.wtf），不需要瀏覽器，1-3 秒
+        # 快速 API（tikwm/douyin.wtf/snaptik），不需要瀏覽器，秒級回應
         fast = await _get_douyin_fast(real_url)
         if fast.get("cdn_url"):
             cdn_f = fast["cdn_url"]
@@ -1113,23 +1113,8 @@ async def video_info(url: str):
                 "cdn_audio_url": "",
                 "formats":       [{"id":"best","label":"原始畫質","height":0}],
             })
-        # fallback：Playwright（慢但可靠，保留原有邏輯不改）
-        cdn_info = await _get_douyin_cdn(real_url)
-        cdn = cdn_info.get("cdn_url") or ""
-        proxy = f"/api/proxy-video?url={_q(cdn, safe='')}" if cdn else ""
-        return JSONResponse({
-            "title":         cdn_info.get("title", "抖音影片"),
-            "thumbnail":     cdn_info.get("thumbnail", ""),
-            "duration":      cdn_info.get("duration", 0),
-            "uploader":      cdn_info.get("uploader", ""),
-            "platform":      "Douyin",
-            "url":           real_url,
-            "has_video":     bool(cdn),
-            "proxy_url":     proxy,
-            "cdn_url":       cdn,
-            "cdn_audio_url": cdn_info.get("cdn_audio_url") or "",
-            "formats":       cdn_info.get("formats", []),
-        })
+        # 快速 API 全失敗，回傳錯誤（Playwright 在雲端跑不動）
+        return JSONResponse({"error":"抖音解析失敗，請稍後重試","error_hint":"抖音 API 暫時無法連線，請過幾秒再試","url":real_url})
 
     if _is_kuaishou(real_url):
         from urllib.parse import quote as _q
@@ -1875,32 +1860,7 @@ async def _dl_progress(real_url: str, title: str, out_dir: Path,
                         return
         except Exception as e: print(f"[dy_api_dl] {e}")
 
-        yield {"type":"progress","pct":5,"msg":"啟動瀏覽器擷取影片..."}
-        try:
-            cdn_info = await _get_douyin_cdn(real_url)
-            cdn = cdn_info.get("cdn_url")
-            if not cdn:
-                yield {"type":"error","message":"無法取得影片，請至設定頁面設定 Cookies"}; return
-            safe = re.sub(r'[\\/:*?"<>|]', '_', cdn_info.get("title") or title)[:60]
-            audio_cdn = cdn_info.get("cdn_audio_url")
-            if audio_cdn:
-                vt = out_dir/f"{safe}_v.mp4"; at = out_dir/f"{safe}_a.m4a"; final = out_dir/f"{safe}.mp4"
-                yield {"type":"progress","pct":20,"msg":"下載影片軌..."}
-                async for evt in httpx_dl(cdn, vt, DY_HEADERS, 20, 60): yield evt
-                yield {"type":"progress","pct":62,"msg":"下載音訊軌..."}
-                async for evt in httpx_dl(audio_cdn, at, DY_HEADERS, 62, 85): yield evt
-                yield {"type":"progress","pct":88,"msg":"合併音訊..."}
-                ffmerge(vt, at, final)
-                if not final.exists():
-                    async for evt in httpx_dl(cdn, final, DY_HEADERS, 88, 98): yield evt
-            else:
-                final = out_dir/f"{safe}.mp4"
-                async for evt in httpx_dl(cdn, final, DY_HEADERS, 10, 95): yield evt
-            sz = final.stat().st_size if final.exists() else 0
-            yield {"type":"done","filename":final.name,"saved_dir":str(out_dir),"size_mb":round(sz/1024/1024,1)}
-        except Exception as ex:
-            yield {"type":"error","message":f"抖音下載失敗：{ex}"}
-        return
+
 
     # ══ 快手 ══════════════════════════════════════════════════════
     if _is_kuaishou(real_url):

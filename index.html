@@ -344,6 +344,22 @@ function toast(m,err=false){ const t=document.createElement('div'); t.className=
 function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function fmtD(s){ if(!s) return ''; const m=Math.floor(s/60),sc=s%60; return `${m}:${String(sc).padStart(2,'0')}`; }
 function isMobile(){ return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)||window.innerWidth<600; }
+
+// ── 儲存/還原解析狀態（防止切換APP後資料遺失）──
+function saveState(){
+  if(!urlInfo) return;
+  try{ localStorage.setItem('vd_urlInfo', JSON.stringify(urlInfo)); }catch(e){}
+}
+function restoreState(){
+  try{
+    const raw=localStorage.getItem('vd_urlInfo');
+    if(!raw) return;
+    const d=JSON.parse(raw);
+    if(!d || !d.url) return;
+    urlInfo=d;
+    renderPreview(d);
+  }catch(e){}
+}
 function setSt(h){ const e=document.getElementById('st-url'); e.innerHTML=h; e.style.display=h?'block':'none'; hideProgress(); }
 function showProgress(step,total,msg){
   const w=document.getElementById('progress-wrap');
@@ -578,6 +594,7 @@ async function fetchUrl(){
     if(d.error){ setSt(d.error_hint||'讀取失敗：'+d.error); return; }
     if(d.error_hint){ setSt('⚠️ '+d.error_hint); } else { setSt(''); }
     urlInfo={...d,url};
+    saveState();
     const vid=document.getElementById('url-video');
     const thumb=document.getElementById('url-thumb');
     if(d.thumbnail){
@@ -613,6 +630,7 @@ async function fetchUrl(){
     document.getElementById('btn-udl').disabled=!canDownload;
     document.getElementById('btn-udl').textContent=canDownload?'⬇️ 去水印下載':'❌ 無法下載（需要登入 Cookies）';
     if(!d.error_hint){ showProgress(5,5,'✅ 解析完成'); setTimeout(hideProgress,800); }
+    saveState();
   }catch(e){
     if(e.name==='AbortError') return;
     setSt('連線失敗：'+e.message);
