@@ -1843,7 +1843,7 @@ async def _dl_progress(real_url: str, title: str, out_dir: Path,
                    "outtmpl":str(out_dir/f"{safe_yt}.%(ext)s"),"quiet":True,"no_warnings":True,
                    "merge_output_format":"mp4","concurrent_fragment_downloads":8,"updatetime":False,
                    "embedmetadata":True,
-                   "postprocessor_args":{"default":["-map_metadata","-1","-movflags","+faststart"]},
+                   "postprocessor_args":{"default":["-movflags","+faststart+fastskip"]},
                    "extractor_args":{"youtube":{"player_client":["android","android_embedded","web"]}}}
         res_yt, err_yt = [], []
         async for evt in ytdlp_dl(opts_yt, real_url, res_yt, err_yt): yield evt
