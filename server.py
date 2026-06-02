@@ -53,7 +53,7 @@ def _load_platform_cookies() -> dict:
         pass
     # 備用：從 Railway 環境變數讀（管理員在 Railway Dashboard 設定的）
     result = {}
-    for plat in ["douyin", "kuaishou", "tiktok"]:
+    for plat in ["douyin", "tiktok"]:
         env_val = os.environ.get(f"{plat.upper()}_COOKIES", "")
         if env_val:
             try:
@@ -65,7 +65,7 @@ def _load_platform_cookies() -> dict:
 def _get_cookies_for_url(url: str) -> list[dict]:
     data = _load_platform_cookies()
     for plat, domain in [
-        ("douyin", "douyin.com"), ("kuaishou", "kuaishou.com"), ("tiktok", "tiktok.com"),
+        ("douyin", "douyin.com"), ("tiktok", "tiktok.com"),
     ]:
         if domain in url:
             return data.get(plat, [])
@@ -94,12 +94,14 @@ def _is_lux_platform(url: str) -> bool:
 
 # ── Invidious 公開實例（YouTube 替代前端，雲端 IP 不被封）──────
 INVIDIOUS_INSTANCES = [
+    "https://inv.tux.pizza",
     "https://invidious.io.lol",
     "https://yewtu.be",
-    "https://inv.tux.pizza",
     "https://invidious.privacyredirect.com",
     "https://iv.datura.network",
     "https://invidious.nerdvpn.de",
+    "https://invidious.slipfox.xyz",
+    "https://youtube.owacon.dev",
 ]
 
 def _extract_youtube_id(url: str) -> str:
@@ -139,7 +141,7 @@ async def _get_youtube_via_invidious(url: str) -> dict:
                 print(f"[invidious] {instance} OK vid={vid_id}")
                 return {"title": title, "uploader": author, "duration": duration,
                         "thumbnail": thumbnail, "cdn_url": cdn_url, "formats": formats,
-                        "platform": "YouTube", "_source": "invidious"}
+                        "platform": "YouTube", "has_video": True, "_source": "invidious"}
         except Exception as ex:
             print(f"[invidious] {instance} 失敗: {ex}")
             continue
@@ -149,9 +151,16 @@ DOWNLOAD_DIR.mkdir(exist_ok=True)
 
 # ── B站直連 API（繞過 yt-dlp 地區限制）────────────────────────────
 _BILI_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
     "Referer": "https://www.bilibili.com/",
+    "Origin": "https://www.bilibili.com",
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
 }
+_BILI_COOKIE = "buvid3=local-12345678; b_nut=1700000000; b_lsid=ABC123;"
+
+import uuid as _uuid
+_BILI_HEADERS_WITH_COOKIE = {**_BILI_HEADERS, "Cookie": _BILI_COOKIE + f" buvid4={_uuid.uuid4().hex[:16]};"}
 
 async def _get_bilibili_direct(url: str) -> dict:
     """直接打 Bilibili API 取得影片資訊和 CDN URL，不走 yt-dlp"""
@@ -161,10 +170,20 @@ async def _get_bilibili_direct(url: str) -> dict:
         return {}
     params = {"bvid": bvid_m.group()} if bvid_m else {"aid": aid_m.group(1)}
     try:
-        async with httpx.AsyncClient(timeout=10, headers=_BILI_HEADERS) as client:
-            # Step 1: 取元數據
-            meta = (await client.get("https://api.bilibili.com/x/web-interface/view", params=params)).json()
-            if meta.get("code") != 0:
+        async with httpx.AsyncClient(timeout=20, headers=_BILI_HEADERS_WITH_COOKIE) as client:
+            # Step 1: 取元數據（嘗試多個 API 端點）
+            meta = None
+            for api_url in ["https://api.bilibili.com/x/web-interface/view", "https://api.bilibili.com/x/web-interface/view/detail"]:
+                try:
+                    resp = await client.get(api_url, params=params)
+                    if resp.status_code == 200:
+                        meta = resp.json()
+                        if meta.get("code") == 0:
+                            break
+                        meta = None
+                except Exception:
+                    continue
+            if not meta or meta.get("code") != 0:
                 return {}
             d = meta["data"]
             bvid  = d.get("bvid", "")
@@ -244,7 +263,7 @@ def extract_url_from_text(text: str) -> str:
 
 async def resolve_short_url(url: str) -> str:
     text_url = extract_url_from_text(url)
-    SHORT_DOMAINS = ("v.douyin.com", "v.kuaishou.com", "kuaishou.app.link",
+    SHORT_DOMAINS = ("v.douyin.com",
                      "xhslink.com", "t.co", "vm.tiktok.com", "vt.tiktok.com")
     if any(d in text_url for d in SHORT_DOMAINS):
         try:
@@ -269,9 +288,6 @@ DOUYIN_LIB = r"D:\tools\Douyin_TikTok_Download_API"
 def _is_douyin(url: str) -> bool:
     return "douyin.com" in url or "douyinvod" in url
 
-def _is_kuaishou(url: str) -> bool:
-    return "kuaishou.com" in url
-
 def _is_shopee_url(url: str) -> bool:
     return any(d in url for d in ("shopee.tw", "shopee.sg", "shopee.vn", "shopee.ph",
                                    "shopee.my", "shopee.co.id", "shp.ee", "sv.shopee"))
@@ -282,7 +298,7 @@ async def _get_shopee_video_info(url: str) -> dict:
         "Accept-Language": "zh-TW,zh;q=0.9",
         "Referer": "https://shopee.tw/",
     }
-    async with httpx.AsyncClient(follow_redirects=True, timeout=20, headers=headers) as c:
+    async with httpx.AsyncClient(follow_redirects=True, timeout=8, headers=headers) as c:
         r0 = await c.get(url)
         final_url = str(r0.url)
 
@@ -297,9 +313,14 @@ async def _get_shopee_video_info(url: str) -> dict:
     if "sv.shopee" not in video_page_url and "share-video" not in video_page_url:
         return {}
 
-    async with httpx.AsyncClient(timeout=20, headers=headers) as c:
-        r = await c.get(video_page_url)
-        html = r.text
+    # 只讀 HTML 前 150KB，加快速度
+    html = ""
+    async with httpx.AsyncClient(timeout=8, headers=headers) as c:
+        async with c.stream("GET", video_page_url) as r:
+            async for chunk in r.aiter_bytes():
+                html += chunk.decode("utf-8", errors="ignore")
+                if len(html) > 150000:
+                    break
 
     mp4_urls = re.findall(r"https?://[^\s\"'<>]+\.mp4[^\s\"'<>]*", html)
     if not mp4_urls:
@@ -370,7 +391,7 @@ async def _get_douyin_fast(url: str) -> dict:
     """超快取得抖音影片 CDN（不需要瀏覽器，1-3 秒）"""
     # ── 方法 1：tikwm.com（同時支援抖音/TikTok，最可靠）──────────
     try:
-        async with httpx.AsyncClient(timeout=12, follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=8, follow_redirects=True) as client:
             r = await client.post("https://tikwm.com/api/",
                 data={"url": url, "hd": "1"},
                 headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"})
@@ -391,7 +412,7 @@ async def _get_douyin_fast(url: str) -> dict:
 
     # ── 方法 2：douyin.wtf 公開 API ────────────────────────────
     try:
-        async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=6, follow_redirects=True) as client:
             r = await client.get("https://api.douyin.wtf/api",
                 params={"url": url, "minimal": "false"},
                 headers={"User-Agent": "Mozilla/5.0"})
@@ -409,6 +430,27 @@ async def _get_douyin_fast(url: str) -> dict:
                     }
     except Exception as e:
         print(f"[douyin_fast/wtf] {e}")
+
+    # ── 方法 3：snaptik.app 公開 API（備用）────────────────────
+    try:
+        async with httpx.AsyncClient(timeout=6, follow_redirects=True) as client:
+            r = await client.post("https://snaptik.app/action-2025.php",
+                data={"url": url, "lang": "en"},
+                headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                    "Content-Type": "application/x-www-form-urlencoded",
+                })
+            import re as _re
+            # 從 HTML 回應中解析 CDN URL
+            cdn_m = _re.search(r'https?://[^"\'<>]+?\.mp4[^"\'<>]*', r.text)
+            if cdn_m:
+                return {
+                    "title": "抖音影片", "thumbnail": "",
+                    "duration": 0, "uploader": "",
+                    "cdn_url": cdn_m.group(0), "cdn_audio_url": "",
+                }
+    except Exception as e:
+        print(f"[douyin_fast/snaptik] {e}")
 
     return {}
 
@@ -693,82 +735,7 @@ async def _get_douyin_cdn(video_url: str) -> dict:
     return result
 
 
-async def _get_kuaishou_cdn(video_url: str) -> dict:
-    try:
-        from playwright.async_api import async_playwright
-    except ImportError:
-        return {}
 
-    result = {"title": "快手影片", "thumbnail": "", "duration": 0,
-              "uploader": "", "cdn_url": None, "formats": []}
-    try:
-        async with async_playwright() as p:
-            browser = await _pw_browser(p)
-            ctx = await browser.new_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-                viewport={"width": 1280, "height": 800})
-            await _apply_cookies(ctx, video_url)
-            page = await ctx.new_page()
-            await _stealth(page)
-
-            found = asyncio.Event()
-
-            async def on_response(resp):
-                if "kuaishou.com/graphql" not in resp.url:
-                    return
-                try:
-                    body = await resp.json()
-                    data = body.get("data") or {}
-                    photo = None
-                    for key in ("visionVideoDetail", "visionVideoDetailExtra",
-                                "visionVideoDetailOuter", "visionVideoGetPlayInfo"):
-                        obj = data.get(key)
-                        if isinstance(obj, dict):
-                            photo = obj.get("photo") or obj.get("videoInfo") or obj
-                            if photo and (photo.get("mainMvUrls") or photo.get("photoUrl")):
-                                break
-                            photo = None
-                    if not photo:
-                        return
-
-                    cdn = ""
-                    for field in ("mainMvUrls", "photoUrl", "urls", "videoUrl"):
-                        v = photo.get(field)
-                        if isinstance(v, list) and v:
-                            cdn = (v[0].get("url") or v[0].get("cdn") or "")
-                            break
-                        elif isinstance(v, str) and v.startswith("http"):
-                            cdn = v; break
-                    if cdn:
-                        result["cdn_url"] = cdn
-                        found.set()
-
-                    caption = photo.get("caption") or photo.get("title") or ""
-                    if caption: result["title"] = caption[:80]
-                    user = photo.get("user") or photo.get("userInfo") or {}
-                    result["uploader"] = user.get("name","") or user.get("userName","")
-                    covers = photo.get("coverUrls") or photo.get("webpCoverUrls") or []
-                    if covers:
-                        result["thumbnail"] = covers[0].get("url","")
-                    dur = photo.get("duration",0) or 0
-                    result["duration"] = dur // 1000 if dur > 1000 else dur
-                except Exception as ex:
-                    print(f"[kuaishou_cdn] GraphQL parse: {ex}")
-
-            page.on("response", on_response)
-            try:
-                await page.goto(video_url, wait_until="domcontentloaded", timeout=25000)
-                try:
-                    await asyncio.wait_for(found.wait(), timeout=20)
-                except asyncio.TimeoutError:
-                    print("[kuaishou_cdn] 超時：未攔截到 GraphQL 影片 URL")
-            except Exception as ex:
-                print(f"[kuaishou_cdn] page load: {ex}")
-            finally:
-                await page.close(); await ctx.close(); await browser.close()
-    except Exception as ex:
-        print(f"[kuaishou_cdn] 錯誤：{ex}")
-    return result
 
 
 async def _get_tiktok_via_tikwm(url: str) -> dict:
@@ -879,43 +846,7 @@ async def _download_from_cdn(cdn_url: str, out_dir: Path, title: str,
 
 
 # ── Cookies 管理 ──────────────────────────────────────────
-@app.post("/api/cookies/save")
-async def save_cookies(platform: str = Form(...), cookies_json: str = Form(...)):
-    try:
-        cookies = json.loads(cookies_json)
-        if not isinstance(cookies, list):
-            return JSONResponse({"ok": False, "error": "格式必須是 JSON 陣列"})
-        normalized = []
-        for c in cookies:
-            if not c.get("name") or not c.get("value"):
-                continue
-            normalized.append({
-                "name": c["name"], "value": c["value"],
-                "domain": c.get("domain", ""),
-                "path": c.get("path", "/"),
-                "secure": c.get("secure", False),
-                "httpOnly": c.get("httpOnly", False),
-            })
-        data = _load_platform_cookies()
-        data[platform.lower()] = normalized
-        COOKIES_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-        return JSONResponse({"ok": True, "count": len(normalized)})
-    except Exception as e:
-        return JSONResponse({"ok": False, "error": str(e)})
 
-@app.get("/api/cookies/status")
-def cookies_status():
-    data = _load_platform_cookies()
-    return JSONResponse({
-        plat: len(data.get(plat, [])) for plat in ["douyin", "kuaishou", "tiktok"]
-    })
-
-@app.delete("/api/cookies/{platform}")
-def delete_cookies(platform: str):
-    data = _load_platform_cookies()
-    data.pop(platform.lower(), None)
-    COOKIES_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-    return JSONResponse({"ok": True})
 
 # ── 首頁 ──────────────────────────────────────────────────
 @app.get("/")
@@ -941,7 +872,7 @@ async def video_info(url: str):
 
     if _is_douyin(real_url):
         from urllib.parse import quote as _q
-        # 優先：快速 API（tikwm/douyin.wtf），不需要瀏覽器，1-3 秒
+        # 快速 API（tikwm/douyin.wtf/snaptik），不需要瀏覽器，秒級回應
         fast = await _get_douyin_fast(real_url)
         if fast.get("cdn_url"):
             cdn_f = fast["cdn_url"]
@@ -958,64 +889,8 @@ async def video_info(url: str):
                 "cdn_audio_url": "",
                 "formats":       [{"id":"best","label":"原始畫質","height":0}],
             })
-        # fallback：Playwright（慢但可靠，保留原有邏輯不改）
-        cdn_info = await _get_douyin_cdn(real_url)
-        cdn = cdn_info.get("cdn_url") or ""
-        proxy = f"/api/proxy-video?url={_q(cdn, safe='')}" if cdn else ""
-        return JSONResponse({
-            "title":         cdn_info.get("title", "抖音影片"),
-            "thumbnail":     cdn_info.get("thumbnail", ""),
-            "duration":      cdn_info.get("duration", 0),
-            "uploader":      cdn_info.get("uploader", ""),
-            "platform":      "Douyin",
-            "url":           real_url,
-            "has_video":     bool(cdn),
-            "proxy_url":     proxy,
-            "cdn_url":       cdn,
-            "cdn_audio_url": cdn_info.get("cdn_audio_url") or "",
-            "formats":       cdn_info.get("formats", []),
-        })
-
-    if _is_kuaishou(real_url):
-        from urllib.parse import quote as _q
-        loop_ks = asyncio.get_event_loop()
-        # 先用 yt-dlp（不需要瀏覽器，雲端可用）
-        def _ks_ytdlp():
-            opts_ks = {"quiet":True,"no_warnings":True,"skip_download":True,
-                       "http_headers":{"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}}
-            with yt_dlp.YoutubeDL(opts_ks) as ydl:
-                return ydl.extract_info(real_url, download=False)
-        try:
-            ks_info = await asyncio.wait_for(loop_ks.run_in_executor(executor, _ks_ytdlp), timeout=15)
-            if ks_info and ks_info.get("url"):
-                ks_cdn = ks_info.get("url","")
-                ks_proxy = f"/api/proxy-video?url={_q(ks_cdn, safe='')}&referer=https://www.kuaishou.com/" if ks_cdn else ""
-                return JSONResponse({
-                    "title": ks_info.get("title","快手影片"), "thumbnail": ks_info.get("thumbnail",""),
-                    "duration": ks_info.get("duration",0), "uploader": ks_info.get("uploader",""),
-                    "platform":"Kuaishou","url":real_url,"has_video":bool(ks_cdn),
-                    "proxy_url":ks_proxy,"cdn_url":ks_cdn,
-                    "formats":[{"id":"best","label":"原始畫質","height":0}],
-                })
-        except Exception:
-            pass
-        # fallback：Playwright（本機可用）
-        cdn_info = await _get_kuaishou_cdn(real_url)
-        cdn = cdn_info.get("cdn_url") or ""
-        proxy = f"/api/proxy-video?url={_q(cdn, safe='')}&referer=https://www.kuaishou.com/" if cdn else ""
-        if cdn or cdn_info.get("title","快手影片") != "快手影片":
-            return JSONResponse({
-                "title":     cdn_info.get("title", "快手影片"),
-                "thumbnail": cdn_info.get("thumbnail", ""),
-                "duration":  cdn_info.get("duration", 0),
-                "uploader":  cdn_info.get("uploader", ""),
-                "platform":  "Kuaishou",
-                "url":       real_url,
-                "has_video": bool(cdn),
-                "proxy_url": proxy,
-                "cdn_url":   cdn,
-                "formats":   [{"id":"best","label":"原始畫質","height":0}],
-            })
+        # 快速 API 全失敗，回傳錯誤（Playwright 在雲端跑不動）
+        return JSONResponse({"error":"抖音解析失敗，請稍後重試","error_hint":"抖音 API 暫時無法連線，請過幾秒再試","url":real_url})
 
     loop = asyncio.get_event_loop()
 
@@ -1202,8 +1077,7 @@ async def video_info(url: str):
             hint = "此影片有地區限制，無法從目前位置觀看"
         elif any(k in el for k in ("not found", "removed", "deleted", "does not exist", "404")):
             hint = "此影片已刪除或不存在"
-        elif _is_kuaishou(real_url):
-            hint = "快手影片解析失敗。如需下載，請至設定頁面貼上快手 Cookies 後再試"
+
         elif "tiktok.com" in real_url:
             hint = "TikTok 影片解析失敗，請至設定頁面貼上 TikTok Cookies"
         return JSONResponse({"error": err_str, "error_hint": hint, "resolved_url": real_url})
@@ -1706,80 +1580,7 @@ async def _dl_progress(real_url: str, title: str, out_dir: Path,
                         return
         except Exception as e: print(f"[dy_api_dl] {e}")
 
-        yield {"type":"progress","pct":5,"msg":"啟動瀏覽器擷取影片..."}
-        try:
-            cdn_info = await _get_douyin_cdn(real_url)
-            cdn = cdn_info.get("cdn_url")
-            if not cdn:
-                yield {"type":"error","message":"無法取得影片，請至設定頁面設定 Cookies"}; return
-            safe = re.sub(r'[\\/:*?"<>|]', '_', cdn_info.get("title") or title)[:60]
-            audio_cdn = cdn_info.get("cdn_audio_url")
-            if audio_cdn:
-                vt = out_dir/f"{safe}_v.mp4"; at = out_dir/f"{safe}_a.m4a"; final = out_dir/f"{safe}.mp4"
-                yield {"type":"progress","pct":20,"msg":"下載影片軌..."}
-                async for evt in httpx_dl(cdn, vt, DY_HEADERS, 20, 60): yield evt
-                yield {"type":"progress","pct":62,"msg":"下載音訊軌..."}
-                async for evt in httpx_dl(audio_cdn, at, DY_HEADERS, 62, 85): yield evt
-                yield {"type":"progress","pct":88,"msg":"合併音訊..."}
-                ffmerge(vt, at, final)
-                if not final.exists():
-                    async for evt in httpx_dl(cdn, final, DY_HEADERS, 88, 98): yield evt
-            else:
-                final = out_dir/f"{safe}.mp4"
-                async for evt in httpx_dl(cdn, final, DY_HEADERS, 10, 95): yield evt
-            sz = final.stat().st_size if final.exists() else 0
-            yield {"type":"done","filename":final.name,"saved_dir":str(out_dir),"size_mb":round(sz/1024/1024,1)}
-        except Exception as ex:
-            yield {"type":"error","message":f"抖音下載失敗：{ex}"}
-        return
 
-    # ══ 快手 ══════════════════════════════════════════════════════
-    if _is_kuaishou(real_url):
-        yield {"type":"progress","pct":5,"msg":"解析快手影片..."}
-        ks_h = {"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                "Referer":"https://www.kuaishou.com/"}
-
-        # 優先：hint_cdn（預覽時已取得）
-        if hint_cdn:
-            safe = re.sub(r'[\\/:*?"<>|]', '_', title)[:60]
-            fpath = out_dir / f"{safe}.mp4"
-            yield {"type":"progress","pct":10,"msg":"下載快手影片..."}
-            async for evt in httpx_dl(hint_cdn, fpath, ks_h, 10, 95): yield evt
-            if fpath.exists() and fpath.stat().st_size > 50000:
-                yield {"type":"done","filename":fpath.name,"saved_dir":str(out_dir),"size_mb":round(fpath.stat().st_size/1024/1024,1)}
-                return
-
-        # yt-dlp（雲端可用，不需要瀏覽器）
-        yield {"type":"progress","pct":8,"msg":"嘗試 yt-dlp 解析快手..."}
-        res_ks, err_ks = [], []
-        safe = re.sub(r'[\\/:*?"<>|]', '_', title)[:60]
-        opts_ks = {"format":"best[ext=mp4]/best","outtmpl":str(out_dir/f"{safe}.%(ext)s"),
-                   "quiet":True,"no_warnings":True,"merge_output_format":"mp4"}
-        async for evt in ytdlp_dl(opts_ks, real_url, res_ks, err_ks): yield evt
-        if res_ks and Path(res_ks[0]).exists() and Path(res_ks[0]).stat().st_size > 50000:
-            yield {"type":"done","filename":Path(res_ks[0]).name,"saved_dir":str(out_dir),"size_mb":round(Path(res_ks[0]).stat().st_size/1024/1024,1)}
-            return
-
-        # fallback：Playwright（本機）
-        yield {"type":"progress","pct":5,"msg":"啟動瀏覽器解析快手..."}
-        try:
-            ks_info = await _get_kuaishou_cdn(real_url)
-            cdn = ks_info.get("cdn_url") or ""
-            use_title = ks_info.get("title") or title
-            if not cdn:
-                yield {"type":"error","message":"無法取得快手影片（雲端限制，建議貼入快手 Cookies）"}
-                return
-            safe2 = re.sub(r'[\\/:*?"<>|]', '_', use_title)[:60]
-            fpath2 = out_dir / f"{safe2}.mp4"
-            async for evt in httpx_dl(cdn, fpath2, ks_h, 10, 95): yield evt
-            sz = fpath2.stat().st_size if fpath2.exists() else 0
-            if sz > 50000:
-                yield {"type":"done","filename":fpath2.name,"saved_dir":str(out_dir),"size_mb":round(sz/1024/1024,1)}
-                return
-            yield {"type":"error","message":"快手下載失敗，請重新解析"}
-        except Exception as ex:
-            yield {"type":"error","message":f"快手下載失敗：{ex}"}
-        return
 
     # ══ 蝦皮短影音 ══════════════════════════════════════════════
     if _is_shopee_url(real_url):
