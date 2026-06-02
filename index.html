@@ -63,15 +63,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 .spin{display:inline-block;width:14px;height:14px;border:2px solid #0d2420;border-top-color:#14b8a6;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:5px}
 @keyframes spin{to{transform:rotate(360deg)}}
 
-/* progress bar */
-.progress-wrap{background:#091a18;border:1px solid #0d2420;border-radius:8px;padding:10px 12px;margin:6px 0;display:none}
-.progress-bar{height:4px;background:#0d2420;border-radius:2px;overflow:hidden;margin-top:8px}
-.progress-fill{height:100%;width:0%;background:linear-gradient(90deg,#14b8a6,#0d9488);border-radius:2px;transition:width .5s ease}
-.progress-step{font-size:0.75rem;color:#5b8a84;margin-bottom:4px}
-.progress-msg{font-size:0.82rem;color:#99f6e4;display:flex;align-items:center;gap:6px}
-.progress-dot{display:inline-block;width:6px;height:6px;background:#14b8a6;border-radius:50%;animation:pulse 1.2s ease-in-out infinite}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
-
 /* preview */
 .preview{background:#060f0f;border:1px solid #0d2420;border-radius:10px;overflow:hidden;display:none;margin-bottom:12px}
 .preview video,.preview img{width:100%;max-height:55vw;object-fit:cover;background:#000;display:block}
@@ -194,26 +185,22 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
       <div class="hero-brand">
         <div class="hero-logo">⬇️</div>
         <div>
-          <div class="hero-title" data-i18n="title">去水印下載工具</div>
-          <div class="hero-sub" data-i18n="subtitle">貼上連結 · 一鍵去水印下載</div>
+          <div class="hero-title">去水印下載工具</div>
+          <div class="hero-sub">貼上連結 · 一鍵去水印下載</div>
         </div>
       </div>
       <div class="hero-btns">
-        <select onchange="switchLang(this.value)" style="background:#0d2420;color:#99f6e4;border:1px solid #14b8a6;border-radius:6px;padding:4px 6px;font-size:0.7rem;cursor:pointer">
-          <option value="zh-TW">繁體中文</option>
-          <option value="zh-CN">简体中文</option>
-          <option value="en">English</option>
-        </select>
+        <button class="hero-btn" id="btn-ck" onclick="toggleCookies()" style="font-size:0.72rem;padding:6px 10px;opacity:0.5">⚙️ 設定</button>
       </div>
     </div>
     <div class="plt-badges">
-      <span class="pbadge pb-dy" data-i18n="dy">抖音</span>
-      <span class="pbadge pb-tk" data-i18n="tk">TikTok</span>
-
-      <span class="pbadge pb-bi" data-i18n="bi">B站</span>
-      <span class="pbadge pb-yt" data-i18n="yt">YouTube</span>
-      <span class="pbadge pb-xhs" data-i18n="xhs">小紅書</span>
-      <span class="pbadge pb-sp" data-i18n="sp">蝦皮短影音</span>
+      <span class="pbadge pb-dy">抖音</span>
+      <span class="pbadge pb-tk">TikTok</span>
+      <span class="pbadge pb-ks">快手</span>
+      <span class="pbadge pb-bi">B站</span>
+      <span class="pbadge pb-yt">YouTube</span>
+      <span class="pbadge pb-xhs">小紅書</span>
+      <span class="pbadge pb-sp">蝦皮短影音</span>
     </div>
   </div>
 </div>
@@ -226,24 +213,19 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
     <div class="card-head">
       <div class="card-ico">🔗</div>
       <div>
-        <div class="card-name" data-i18n="cardName">貼上影片連結</div>
-        <div class="card-hint" data-i18n="cardHint">抖音 · TikTok · B站 · YouTube · 小紅書 · 蝦皮 — 支援分享文字直接貼上</div>
+        <div class="card-name">貼上影片連結</div>
+        <div class="card-hint">抖音 · TikTok · 快手 · B站 · YouTube · 小紅書 · 蝦皮 — 支援分享文字直接貼上</div>
       </div>
     </div>
 
-    <textarea class="url-inp" id="url-inp" data-i18n-placeholder="inputPlaceholder" placeholder="貼上影片連結或抖音/TikTok 分享文字（整段貼上即可，自動解析）" rows="3"></textarea>
+    <textarea class="url-inp" id="url-inp" placeholder="貼上影片連結或抖音/TikTok 分享文字（整段貼上即可，自動解析）" rows="3" id="url-inp"></textarea>
 
     <div class="btn-row">
-      <button class="btn btn-paste" onclick="pasteAndParse()" data-i18n="btnPaste">📋 貼上並解析</button>
-      <button class="btn btn-parse" id="btn-parse" onclick="fetchUrl()" data-i18n="btnParse">🔍 開始解析</button>
+      <button class="btn btn-paste" onclick="pasteAndParse()">📋 貼上並解析</button>
+      <button class="btn btn-parse" id="btn-parse" onclick="fetchUrl()">🔍 開始解析</button>
     </div>
 
     <div id="st-url" class="st" style="display:none"></div>
-    <div class="progress-wrap" id="progress-wrap">
-      <div class="progress-step" id="progress-step">步驟 1/4</div>
-      <div class="progress-msg" id="progress-msg"><span class="progress-dot"></span> 解析網址中...</div>
-      <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
-    </div>
 
     <!-- 預覽區 -->
     <div class="preview" id="preview">
@@ -258,7 +240,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
           <div class="qlabel">選擇畫質</div>
           <div class="qbtns" id="quality-btns"></div>
         </div>
-        <button class="btn btn-dl" id="btn-udl" onclick="dlUrl()" disabled data-i18n="btnDownload">⬇️ 去水印下載</button>
+        <button class="btn btn-dl" id="btn-udl" onclick="dlUrl()" disabled>⬇️ 去水印下載</button>
         <div id="url-prog" class="dl-prog"></div>
       </div>
     </div>
@@ -267,10 +249,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
   <!-- 已下載 -->
   <div class="dls-card">
     <div class="dls-head">
-      <h2 data-i18n="downloadedTitle">📁 已下載</h2>
-      <button class="hero-btn" onclick="loadDls()" style="font-size:0.72rem;padding:5px 12px" data-i18n="refresh">🔄 重新整理</button>
+      <h2>📁 已下載</h2>
+      <button class="hero-btn" onclick="loadDls()" style="font-size:0.72rem;padding:5px 12px">🔄 重新整理</button>
     </div>
-    <div id="dls-list"><div class="dls-empty" data-i18n="noDownloads">尚無已下載影片</div></div>
+    <div id="dls-list"><div class="dls-empty">尚無已下載影片</div></div>
   </div>
 
 </div>
@@ -289,6 +271,36 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
     </div>
   </div>
 </div>
+
+<!-- ══ COOKIES MODAL ══ -->
+<div class="guide-modal hide" id="cookies-modal" onclick="if(event.target===this)toggleCookies()">
+  <div class="guide-box">
+    <div class="guide-head">
+      <h3>🍪 平台 Cookies 設定</h3>
+      <button class="guide-close" onclick="toggleCookies()">✕</button>
+    </div>
+    <div style="padding:16px 20px;display:flex;flex-direction:column;gap:14px">
+      <div style="font-size:0.75rem;color:#5eead4;background:#0a1f1a;border:1px solid #0d3a20;border-radius:8px;padding:10px 12px;line-height:1.7">
+        <b style="color:#99f6e4">為什麼需要 Cookies？</b><br>
+        抖音／快手／TikTok 會封鎖無登入的請求。貼上你的帳號 Cookies 後，工具能正常解析。<br>
+        <b style="color:#fbbf24">做法：</b>在 Edge 安裝 <b style="color:#fff">「Cookie Editor」</b> → 登入平台 → 點擴充圖示 → Export → 複製貼到下方。
+      </div>
+      <div id="ck-status" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+      <div>
+        <div style="font-size:0.8rem;color:#5eead4;font-weight:600;margin-bottom:6px">選擇平台</div>
+        <select class="sel" id="ck-platform" style="margin-bottom:8px">
+          <option value="douyin">抖音 (douyin.com)</option>
+          <option value="kuaishou">快手 (kuaishou.com)</option>
+          <option value="tiktok">TikTok (tiktok.com)</option>
+        </select>
+        <textarea class="inp" id="ck-json" placeholder='貼上 Cookie Editor 匯出的 JSON' rows="5" style="resize:vertical;font-size:0.72rem;font-family:monospace;line-height:1.4"></textarea>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="btn" onclick="saveCookies()" style="flex:2;padding:8px;background:linear-gradient(135deg,#0d9488,#14b8a6);color:#fff;border-radius:9px;font-weight:600">✅ 儲存 Cookies</button>
+          <button class="btn" onclick="delCookies()" style="flex:1;padding:8px;background:#141420;border:1px solid #3b1515;color:#f87171;border-radius:9px;font-weight:600">🗑️ 清除</button>
+        </div>
+        <div id="ck-msg" style="font-size:0.72rem;margin-top:6px;color:#34d399;display:none"></div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -313,75 +325,12 @@ function agreeDisclaimer(){
 }
 (function(){ if(!localStorage.getItem('dl_disclaimer')) document.getElementById('disc-modal').classList.remove('hide'); })();
 
-// ── 三語翻譯系統 ──
-const LANG_DATA={
-  "zh-TW":{
-    title:"去水印下載工具",subtitle:"貼上連結 · 一鍵去水印下載",inputPlaceholder:"貼上影片連結或抖音/TikTok 分享文字（整段貼上即可，自動解析）",btnPaste:"📋 貼上並解析",btnParse:"🔍 開始解析",btnDownload:"⬇️ 去水印下載",btnAgree:"同意並繼續使用",cardName:"貼上影片連結",cardHint:"抖音 · TikTok · B站 · YouTube · 小紅書 · 蝦皮 — 支援分享文字直接貼上",step:"步驟",progressUrl:"解析網址中...",progressConnect:"正在連線目標平台...",progressFetch:"正在取得影片資訊...",progressDone:"✅ 解析完成",progressFail:"❌ 解析失敗",downloading:"下載中...",preparing:"準備中...",downloadedTitle:"📁 已下載",refresh:"🔄 重新整理",noDownloads:"尚無已下載影片",loading:"載入中...",loadFailed:"載入失敗",disclaimerTitle:"使用須知",disclaimerP1:"本工具僅供個人合法用途使用，例如下載自己擁有版權的內容、或在各平台明確允許下載的公開影片。",disclaimerLi1:"本工具不儲存任何使用者影片或個人資料",disclaimerLi2:"下載行為由使用者自行負責，請遵守各國著作權法及各平台服務條款",disclaimerLi3:"本工具開發者不對任何使用者的下載行為承擔法律責任",disclaimerAgree:"我已閱讀並同意上述條款，且確認我的使用符合當地法律",errorRetry:"⚠️ 正在努力解析中，若持續失敗請確認網址正確",errorSlow:"⚠️ 解析較慢，請稍後再試",errorTimeout:"⚠️ 連線較慢，請確認網路後再試",errorNoPreview:"⚠️ 此平台不支援直接預覽，但仍可去水印下載",toastEmpty:"請先貼上網址或分享文字",toastNoUrl:"找不到有效網址，請確認貼上內容包含 http",downloadMobile:"⬇️ 下載中，請查看通知列...",downloadSavePhoto:"儲存到照片",downloadSaveVideo:"儲存影片/下載",downloadSent:"✅ 已送出",downloadRetry:"🔄 重試",downloadCancel:"已取消，可再次點擊重試",dy:"抖音",tk:"TikTok",bi:"B站",yt:"YouTube",xhs:"小紅書",sp:"蝦皮短影音",langZhTW:"繁體中文",langZhCN:"简体中文",langEN:"English",
-  },
-  "zh-CN":{
-    title:"去水印下载工具",subtitle:"贴上链接 · 一键去水印下载",inputPlaceholder:"贴上影片链接或抖音/TikTok 分享文字（整段贴上即可，自动解析）",btnPaste:"📋 贴上并解析",btnParse:"🔍 开始解析",btnDownload:"⬇️ 去水印下载",btnAgree:"同意并继续使用",cardName:"贴上影片链接",cardHint:"抖音 · TikTok · B站 · YouTube · 小红书 · 虾皮 — 支持分享文字直接贴上",step:"步骤",progressUrl:"解析网址中...",progressConnect:"正在连线目标平台...",progressFetch:"正在取得影片信息...",progressDone:"✅ 解析完成",progressFail:"❌ 解析失败",downloading:"下载中...",preparing:"准备中...",downloadedTitle:"📁 已下载",refresh:"🔄 刷新",noDownloads:"暂无已下载影片",loading:"加载中...",loadFailed:"加载失败",disclaimerTitle:"使用须知",disclaimerP1:"本工具仅供个人合法用途使用，例如下载自己拥有版权的内容、或在各平台明确允许下载的公开影片。",disclaimerLi1:"本工具不储存任何使用者影片或个人资料",disclaimerLi2:"下载行为由使用者自行负责，请遵守各国著作权法及各平台服务条款",disclaimerLi3:"本工具开发者不对任何使用者的下载行为承担法律责任",disclaimerAgree:"我已阅读并同意上述条款，且确认我的使用符合当地法律",errorRetry:"⚠️ 正在努力解析中，若持续失败请确认网址正确",errorSlow:"⚠️ 解析较慢，请稍后再试",errorTimeout:"⚠️ 连线较慢，请确认网络后再试",errorNoPreview:"⚠️ 此平台不支持直接预览，但仍可去水印下载",toastEmpty:"请先贴上网址或分享文字",toastNoUrl:"找不到有效网址，请确认贴上内容包含 http",downloadMobile:"⬇️ 下载中，请查看通知列...",downloadSavePhoto:"保存到照片",downloadSaveVideo:"保存影片/下载",downloadSent:"✅ 已送出",downloadRetry:"🔄 重试",downloadCancel:"已取消，可再次点击重试",dy:"抖音",tk:"TikTok",bi:"B站",yt:"YouTube",xhs:"小红书",sp:"虾皮短视频",langZhTW:"繁體中文",langZhCN:"简体中文",langEN:"English",
-  },
-  "en":{
-    title:"Watermark Remover",subtitle:"Paste link · Remove watermark with one click",inputPlaceholder:"Paste video link or Douyin/TikTok share text (auto-detect)",btnPaste:"📋 Paste & Parse",btnParse:"🔍 Parse",btnDownload:"⬇️ Download (No Watermark)",btnAgree:"I Agree & Continue",cardName:"Paste video link",cardHint:"Douyin · TikTok · Bilibili · YouTube · Xiaohongshu · Shopee",step:"Step",progressUrl:"Parsing URL...",progressConnect:"Connecting to platform...",progressFetch:"Fetching video info...",progressDone:"✅ Complete",progressFail:"❌ Failed",downloading:"Downloading...",preparing:"Preparing...",downloadedTitle:"📁 Downloads",refresh:"🔄 Refresh",noDownloads:"No downloads yet",loading:"Loading...",loadFailed:"Load failed",disclaimerTitle:"Terms of Use",disclaimerP1:"This tool is for personal legal use only, such as downloading your own copyrighted content or public videos from platforms that explicitly allow downloading.",disclaimerLi1:"We do not store any user videos or personal data",disclaimerLi2:"Users are solely responsible for their downloads",disclaimerLi3:"The developer assumes no legal liability",disclaimerAgree:"I have read and agree to the terms above",errorRetry:"⚠️ Parsing, please try again if it persists",errorSlow:"⚠️ Slow connection, please wait...",errorTimeout:"⚠️ Connection timeout, please check your network",errorNoPreview:"⚠️ Preview not available, but you can still download",toastEmpty:"Please paste a URL first",toastNoUrl:"No valid URL found",downloadMobile:"⬇️ Downloading, check notification bar...",downloadSavePhoto:"Save to Photos",downloadSaveVideo:"Save Video/Download",downloadSent:"✅ Sent",downloadRetry:"🔄 Retry",downloadCancel:"Cancelled, tap to retry",dy:"Douyin",tk:"TikTok",bi:"Bilibili",yt:"YouTube",xhs:"Xiaohongshu",sp:"Shopee",langZhTW:"繁體中文",langZhCN:"简体中文",langEN:"English",
-  },
-};
-let _currentLang=localStorage.getItem('vd_lang')||'zh-TW';
-function __(key){ return LANG_DATA[_currentLang]?.[key]||LANG_DATA['zh-TW'][key]||key; }
-function switchLang(lang){
-  if(!LANG_DATA[lang]) return;
-  _currentLang=lang;
-  localStorage.setItem('vd_lang',lang);
-  document.documentElement.lang=lang;
-  // 更新靜態元素
-  document.querySelectorAll('[data-i18n]').forEach(el=>{
-    const key=el.getAttribute('data-i18n');
-    if(key) el.textContent=__(key);
-  });
-  document.querySelectorAll('[data-i18n-placeholder]').forEach(el=>{
-    const key=el.getAttribute('data-i18n-placeholder');
-    if(key) el.placeholder=__(key);
-  });
-  document.title=__('title');
-  // 重新整理動態內容
-  if(typeof loadDls==='function') loadDls();
-}
-// 初始化語言
-switchLang(_currentLang);
-document.querySelectorAll('select[onchange*="switchLang"]').forEach(s=>{ s.value=_currentLang; });
-
 /* ── 工具函數 ── */
 function toast(m,err=false){ const t=document.createElement('div'); t.className='toast'+(err?' err':''); t.textContent=m; document.body.appendChild(t); setTimeout(()=>t.remove(),3500); }
 function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function fmtD(s){ if(!s) return ''; const m=Math.floor(s/60),sc=s%60; return `${m}:${String(sc).padStart(2,'0')}`; }
 function isMobile(){ return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)||window.innerWidth<600; }
-
-// ── 儲存/還原解析狀態（防止切換APP後資料遺失）──
-function saveState(){
-  if(!urlInfo) return;
-  try{ localStorage.setItem('vd_urlInfo', JSON.stringify(urlInfo)); }catch(e){}
-}
-function restoreState(){
-  try{
-    const raw=localStorage.getItem('vd_urlInfo');
-    if(!raw) return;
-    const d=JSON.parse(raw);
-    if(!d || !d.url) return;
-    urlInfo=d;
-    renderPreview(d);
-  }catch(e){}
-}
 function setSt(h){ const e=document.getElementById('st-url'); e.innerHTML=h; e.style.display=h?'block':'none'; }
-function showProgress(step,total,msg){
-  const w=document.getElementById('progress-wrap');
-  const s=document.getElementById('progress-step');
-  const m=document.getElementById('progress-msg');
-  const f=document.getElementById('progress-fill');
-  w.style.display='block';
-  s.textContent=`步驟 ${step}/${total}`;
-  m.innerHTML=`<span class="progress-dot"></span> ${msg}`;
-  f.style.width=Math.round(step/total*100)+'%';
-}
-function hideProgress(){ document.getElementById('progress-wrap').style.display='none'; }
 function getDeviceId(){ let id=localStorage.getItem('dl_device_id'); if(!id){ id=crypto.randomUUID(); localStorage.setItem('dl_device_id',id); } return id; }
 function extractUrl(text){ const m=text.match(/https?:\/\/[^\s一-鿿＀-￯　-〿⺀-⻿]+/); if(m) return m[0].replace(/[,，。！？、]+$/,''); return text.trim(); }
 function getSavePath(){ return isMobile()?'':localStorage.getItem('dl_save_path')||''; }
@@ -542,9 +491,9 @@ async function dlVideo(url, title, cdnUrl, cdnAudioUrl, quality){
             toast(`✅ 已儲存：${d.filename}（${d.size_mb}MB）`);
             loadDls();
           }
-          // 下載完成後不重置預覽區，讓用戶還可以看
-          // 只清空輸入框（方便貼下一個），但預覽留著
+          // 下載完成後重置預覽區，讓用戶可以直接貼下一個連結
           setTimeout(()=>{
+            resetPreview();
             document.getElementById('url-inp').value='';
             document.getElementById('url-inp').focus();
           }, isMobile()?100:2200);
@@ -592,29 +541,15 @@ async function fetchUrl(){
   if(_fetchAbort){ _fetchAbort.abort(); _fetchAbort=null; }
   _fetchAbort=new AbortController();
 
-  showProgress(1,5,'解析網址中...');
+  setSt('<span class="spin"></span>讀取影片資訊...');
   resetPreview();
   document.getElementById('btn-parse').disabled=true;
-  setTimeout(()=>showProgress(2,5,'正在連線目標平台...'),300);
   try{
-    showProgress(3,5,'正在取得影片資訊...');
     const r=await fetch(API+'/api/video-info?url='+encodeURIComponent(url),{signal:_fetchAbort.signal});
-    showProgress(4,5,'解析完成，處理資料...');
     const d=await r.json();
-    if(d.error){
-      showProgress(5,5,'❌ 解析失敗');
-      setTimeout(()=>hideProgress(),2000);
-      const friendly=d.error_hint||'';
-      if(friendly.includes('不支援')||friendly.includes('不支持')){
-        setSt('⚠️ 暫時無法解析，請確認網址正確');
-      } else {
-        setSt(friendly ? '⚠️ '+friendly : '⚠️ 解析較慢，請稍後再試');
-      }
-      return;
-    }
+    if(d.error){ setSt(d.error_hint||'讀取失敗：'+d.error); return; }
     if(d.error_hint){ setSt('⚠️ '+d.error_hint); } else { setSt(''); }
     urlInfo={...d,url};
-    saveState();
     const vid=document.getElementById('url-video');
     const thumb=document.getElementById('url-thumb');
     if(d.thumbnail){
@@ -626,7 +561,7 @@ async function fetchUrl(){
       vid.style.display='none'; vid.src='';
       if(d.thumbnail){ thumb.src=d.thumbnail; thumb.style.display='block'; }
       else { document.getElementById('url-ph').style.display='flex'; }
-      if(!d.error_hint) setSt('⚠️ 無法預覽，但可下載');
+      if(!d.error_hint) setSt('⚠️ 此平台不支援直接預覽，但仍可去水印下載');
     };
     if(d.embed_url){
       const fr=document.getElementById('url-fr');
@@ -648,13 +583,11 @@ async function fetchUrl(){
     document.getElementById('preview').style.display='block';
     const canDownload=!!(d.cdn_url||d.proxy_url||(d.formats&&d.formats.length));
     document.getElementById('btn-udl').disabled=!canDownload;
-    document.getElementById('btn-udl').textContent=canDownload?'⬇️ 去水印下載':'❌ 無法下載';
-    if(!d.error_hint){ showProgress(5,5,'✅ 解析完成'); setTimeout(hideProgress,1500); }
-    saveState();
+    document.getElementById('btn-udl').textContent=canDownload?'⬇️ 去水印下載':'❌ 無法下載（需要登入 Cookies）';
+    if(!d.error_hint) setSt('');
   }catch(e){
     if(e.name==='AbortError') return;
-    // 連線失敗不要直接顯示錯誤，改為重試提示
-    setSt('⚠️ 連線較慢，請確認網路後再試 ('+e.message.slice(0,30)+')');
+    setSt('連線失敗：'+e.message);
   }finally{
     document.getElementById('btn-parse').disabled=false;
     _fetchAbort=null;
@@ -741,11 +674,11 @@ function selectQuality(el,qid){
 /* ── 已下載清單 ── */
 async function loadDls(){
   const el=document.getElementById('dls-list');
-  el.innerHTML='<div class="dls-empty">'+__('loading')+'</div>';
+  el.innerHTML='<div class="dls-empty">載入中...</div>';
   try{
     const r=await fetch(API+'/api/downloads?device_id='+encodeURIComponent(getDeviceId()));
     const d=await r.json();
-    if(!d.length){ el.innerHTML='<div class="dls-empty">'+__('noDownloads')+'</div>'; return; }
+    if(!d.length){ el.innerHTML='<div class="dls-empty">尚無已下載影片</div>'; return; }
     el.innerHTML='<div class="dls-grid">'+d.map(f=>`
       <div class="dl-card" onclick="openDlVideo('${esc(API+f.url)}','${esc(f.name)}','${f.size_mb}')">
         <div class="dl-thumb-wrap">
@@ -757,7 +690,7 @@ async function loadDls(){
           <div class="dl-fmeta"><span>${f.size_mb} MB</span><span style="color:#0d9488">▶</span></div>
         </div>
       </div>`).join('')+'</div>';
-  }catch(e){ el.innerHTML='<div class="dls-empty">'+__('loadFailed')+'</div>'; }
+  }catch(e){ el.innerHTML='<div class="dls-empty">載入失敗</div>'; }
 }
 
 function openDlVideo(url,name,sizeMb){
@@ -773,6 +706,50 @@ function closeModal(){
   const mv=document.getElementById('m-vid'); mv.pause(); mv.src='';
   document.getElementById('m-fr').src='';
   document.getElementById('ov').classList.add('hide');
+}
+
+/* ── Cookies 管理 ── */
+function toggleCookies(){
+  document.getElementById('cookies-modal').classList.toggle('hide');
+  loadCookieStatus();
+}
+async function loadCookieStatus(){
+  try{
+    const r=await fetch(API+'/api/cookies/status');
+    const d=await r.json();
+    const labels={'douyin':'抖音','kuaishou':'快手','tiktok':'TikTok'};
+    document.getElementById('ck-status').innerHTML=Object.keys(labels).map(p=>`
+      <span style="padding:3px 10px;border-radius:12px;font-size:0.7rem;background:${d[p]>0?'#042f2e':'#141414'};border:1px solid ${d[p]>0?'#0d9488':'#252525'};color:${d[p]>0?'#5eead4':'#4b5563'}">
+        ${labels[p]}: ${d[p]>0?d[p]+'個 ✅':'未設定'}
+      </span>`).join('');
+    const total=Object.values(d).reduce((a,b)=>a+b,0);
+    const btn=document.getElementById('btn-ck');
+    if(total>0){ btn.style.background='rgba(13,148,136,.15)'; btn.style.borderColor='rgba(13,148,136,.4)'; btn.style.color='#5eead4'; btn.className='hero-btn'; }
+    else        { btn.className='hero-btn warn'; }
+  }catch(e){}
+}
+async function saveCookies(){
+  const platform=document.getElementById('ck-platform').value;
+  const jsonTxt=document.getElementById('ck-json').value.trim();
+  const msg=document.getElementById('ck-msg'); msg.style.display='none';
+  if(!jsonTxt){ toast('請先貼上 Cookies JSON',true); return; }
+  try{ JSON.parse(jsonTxt); }catch(e){ toast('JSON 格式錯誤',true); return; }
+  try{
+    const fd=new FormData(); fd.append('platform',platform); fd.append('cookies_json',jsonTxt);
+    const r=await fetch(API+'/api/cookies/save',{method:'POST',body:fd});
+    const d=await r.json();
+    if(d.ok){ msg.style.color='#34d399'; msg.style.display='block'; msg.textContent='✅ 已儲存 '+d.count+' 個 Cookies'; loadCookieStatus(); }
+    else { msg.style.color='#f87171'; msg.style.display='block'; msg.textContent='❌ '+(d.error||'儲存失敗'); }
+  }catch(e){ toast('儲存失敗：'+e.message,true); }
+}
+async function delCookies(){
+  const platform=document.getElementById('ck-platform').value;
+  try{
+    await fetch(API+'/api/cookies/'+platform,{method:'DELETE'});
+    document.getElementById('ck-json').value='';
+    document.getElementById('ck-msg').style.display='none';
+    loadCookieStatus(); toast('✅ 已清除 '+platform+' Cookies');
+  }catch(e){ toast('清除失敗',true); }
 }
 
 /* ── 初始化 ── */
