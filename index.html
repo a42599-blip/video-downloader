@@ -698,14 +698,6 @@ async function dlUrl(){
   const quality=urlInfo.selectedQuality||'best';
   let cdnUrl=urlInfo.cdn_url||'';
   const cdnAudioUrl=urlInfo.cdn_audio_url||'';
-  // YouTube CDN URL 會過期，下載前重新整理
-  if(urlInfo.platform==='Youtube'&&(!cdnUrl||!urlInfo._refreshed)){
-    try{
-      const r=await fetch(API+'/api/video-info?url='+encodeURIComponent(urlInfo.url));
-      const d=await r.json();
-      if(d.cdn_url){ cdnUrl=d.cdn_url; urlInfo.cdn_url=d.cdn_url; urlInfo._refreshed=true; }
-    }catch(e){}
-  }
   if(quality!=='best' && urlInfo.formats && urlInfo.formats.length){
     const fmt=urlInfo.formats.find(f=>f.id===quality);
     if(fmt&&fmt.url) cdnUrl=fmt.url;

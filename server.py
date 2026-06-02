@@ -1762,25 +1762,12 @@ async def _dl_progress(real_url: str, title: str, out_dir: Path,
             return
         yield {"type":"progress","pct":2,"msg":"CDN URL 已過期，改用 yt-dlp 重新下載..."}
 
-    # ══ YouTube：Invidious 優先（繞過雲端封鎖）══════════════════
+    # ══ YouTube：用 yt-dlp Android 客戶端下載（比 Invidious 更穩定）═══
     if "youtube.com" in real_url or "youtu.be" in real_url:
-        yield {"type":"progress","pct":5,"msg":"透過 Invidious 取得 YouTube 影片..."}
-        inv = await _get_youtube_via_invidious(real_url)
-        if inv.get("cdn_url"):
-            yield {"type":"progress","pct":10,"msg":"開始下載 YouTube 影片..."}
-            safe_yt = re.sub(r'[\\/:*?"<>|]', '_', inv.get("title") or title)[:60]
-            fpath_yt = out_dir / f"{safe_yt}.mp4"
-            yt_h = {"User-Agent":"Mozilla/5.0","Referer":"https://www.youtube.com/"}
-            async for evt in httpx_dl(inv["cdn_url"], fpath_yt, yt_h, 10, 95): yield evt
-            sz_yt = fpath_yt.stat().st_size if fpath_yt.exists() else 0
-            if sz_yt > 50000:
-                yield {"type":"done","filename":fpath_yt.name,"saved_dir":str(out_dir),"size_mb":round(sz_yt/1024/1024,1)}
-                return
-        # Invidious 失敗 → yt-dlp Android 備用
-        yield {"type":"progress","pct":5,"msg":"Invidious 失敗，改用 yt-dlp..."}
-        safe_yt2 = re.sub(r'[\\/:*?"<>|]', '_', title)[:60]
+        yield {"type":"progress","pct":5,"msg":"正在下載 YouTube 影片（Android 客戶端）..."}
+        safe_yt = re.sub(r'[\\/:*?"<>|]', '_', title)[:60]
         opts_yt = {"format":"bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
-                   "outtmpl":str(out_dir/f"{safe_yt2}.%(ext)s"),"quiet":True,"no_warnings":True,
+                   "outtmpl":str(out_dir/f"{safe_yt}.%(ext)s"),"quiet":True,"no_warnings":True,
                    "merge_output_format":"mp4","concurrent_fragment_downloads":8,"updatetime":False,
                    "postprocessor_args":{"default":["-map_metadata","-1"]},
                    "extractor_args":{"youtube":{"player_client":["android","android_embedded","web"]}}}
