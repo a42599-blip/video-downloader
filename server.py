@@ -933,9 +933,28 @@ async def video_info(url: str):
                 "cdn_audio_url": "",
                 "formats":       [{"id":"best","label":"原始畫質","height":0}],
             })
-        # 快速 API 全失敗 → 不回傳錯誤，讓前端啟用下載按鈕
-        # 下載時會透過 yt-dlp / API 再次嘗試取得影片
+        # 快速 API 失敗 → 改用 API（a_bogus 簽名）取得影片資訊
         dy_aweme_id = _parse_aweme_id(real_url) or ""
+        if dy_aweme_id:
+            api_info = await _get_douyin_info_api(dy_aweme_id)
+            video_url = api_info.get("video_url") or ""
+            if video_url:
+                from urllib.parse import quote as _q2
+                return JSONResponse({
+                    "title":         api_info.get("title", "抖音影片"),
+                    "thumbnail":     api_info.get("thumbnail", ""),
+                    "duration":      api_info.get("duration", 0),
+                    "uploader":      api_info.get("uploader", ""),
+                    "platform":      "Douyin",
+                    "url":           real_url,
+                    "has_video":     True,
+                    "proxy_url":     f"/api/proxy-video?url={_q2(video_url, safe='')}&referer=https://www.douyin.com/",
+                    "cdn_url":       video_url,
+                    "cdn_audio_url": "",
+                    "formats":       [{"id":"best","label":"原始畫質","height":0}],
+                })
+        
+        # 以上全失敗 → 不回傳錯誤，讓前端啟用下載按鈕
         return JSONResponse({
             "title": "抖音影片", "thumbnail": "",
             "duration": 0, "uploader": "",

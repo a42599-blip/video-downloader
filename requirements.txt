@@ -5,3 +5,5 @@ yt-dlp
 playwright>=1.44.0
 playwright-stealth>=1.0.6
 python-multipart>=0.0.9
+pyyaml>=6.0
+gmssl>=3.2.2
