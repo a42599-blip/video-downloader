@@ -958,8 +958,11 @@ async def video_info(url: str):
                 "cdn_audio_url": "",
                 "formats":       [{"id":"best","label":"原始畫質","height":0}],
             })
-        # fallback：Playwright（慢但可靠，保留原有邏輯不改）
-        cdn_info = await _get_douyin_cdn(real_url)
+        # fallback：Playwright（設短 timeout，雲端跑不動就快速跳過）
+        try:
+            cdn_info = await asyncio.wait_for(_get_douyin_cdn(real_url), timeout=20)
+        except:
+            cdn_info = {}
         cdn = cdn_info.get("cdn_url") or ""
         proxy = f"/api/proxy-video?url={_q(cdn, safe='')}" if cdn else ""
         return JSONResponse({
@@ -1287,10 +1290,10 @@ async def download_video(url: str = Form(...), title: str = Form("影片"), save
             print(f"[dy_api_dl] 失敗：{e}")
 
         try:
-            cdn_info = await _get_douyin_cdn(real_url)
+            cdn_info = await asyncio.wait_for(_get_douyin_cdn(real_url), timeout=20)
             cdn = cdn_info.get("cdn_url")
             if not cdn:
-                return JSONResponse({"success": False, "error": "無法取得抖音影片，請至後台設定 Cookies 後再試"})
+                return JSONResponse({"success": False, "error": "無法取得抖音影片"})
             use_title = cdn_info.get("title") or title
             audio_cdn = cdn_info.get("cdn_audio_url")
             fname, saved_dir = await _download_from_cdn(cdn, out_dir, use_title, audio_cdn)
