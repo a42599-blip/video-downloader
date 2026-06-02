@@ -342,6 +342,8 @@ function switchLang(lang){
     if(key) el.placeholder=__(key);
   });
   document.title=__('title');
+  // 重新整理動態內容
+  if(typeof loadDls==='function') loadDls();
 }
 // 初始化語言
 switchLang(_currentLang);
