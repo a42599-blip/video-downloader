@@ -591,6 +591,7 @@ async function fetchUrl(){
   // 取消上一次未完成的解析
   if(_fetchAbort){ _fetchAbort.abort(); _fetchAbort=null; }
   _fetchAbort=new AbortController();
+  const _fetchTimeout=setTimeout(()=>{ _fetchAbort.abort(); setSt('⚠️ 解析超時，請稍後再試'); },30000);
 
   showProgress(1,5,'解析網址中...');
   resetPreview();
@@ -656,6 +657,7 @@ async function fetchUrl(){
     // 連線失敗不要直接顯示錯誤，改為重試提示
     setSt('⚠️ 連線較慢，請確認網路後再試 ('+e.message.slice(0,30)+')');
   }finally{
+    clearTimeout(_fetchTimeout);
     document.getElementById('btn-parse').disabled=false;
     _fetchAbort=null;
   }
