@@ -889,25 +889,7 @@ async def video_info(url: str):
                 "cdn_audio_url": "",
                 "formats":       [{"id":"best","label":"原始畫質","height":0}],
             })
-        # 快速 API 全失敗，嘗試 Playwright（雲端可能跑不動，設短 timeout）
-        try:
-            cdn_info = await asyncio.wait_for(_get_douyin_cdn(real_url), timeout=15)
-            cdn = cdn_info.get("cdn_url") or ""
-            if cdn:
-                from urllib.parse import quote as _q2
-                proxy = f"/api/proxy-video?url={_q2(cdn, safe='')}" if cdn else ""
-                return JSONResponse({
-                    "title": cdn_info.get("title", "抖音影片"),
-                    "thumbnail": cdn_info.get("thumbnail", ""),
-                    "duration": cdn_info.get("duration", 0),
-                    "uploader": cdn_info.get("uploader", ""),
-                    "platform": "Douyin", "url": real_url,
-                    "has_video": True, "proxy_url": proxy,
-                    "cdn_url": cdn,
-                    "formats": [{"id":"best","label":"原始畫質","height":0}],
-                })
-        except Exception:
-            pass
+        # 快速 API 全失敗（Playwright 在 512MB 雲端跑不動）
         return JSONResponse({"error":"抖音解析失敗","error_hint":"暫時無法連線抖音，請稍後再試","url":real_url})
 
     loop = asyncio.get_event_loop()
