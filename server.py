@@ -1808,8 +1808,8 @@ async def _dl_progress(real_url: str, title: str, out_dir: Path,
         yield {"type":"done","filename":new_files[0].name,"saved_dir":str(out_dir),"size_mb":round(new_files[0].stat().st_size/1024/1024,1)}
         return
 
-    # ══ 通用快速路徑：有 hint_cdn 時直接 httpx 下載 ══
-    if hint_cdn:
+    # ══ 通用快速路徑：有 hint_cdn 時直接 httpx 下載（但跳過 YouTube，讓 yt-dlp 處理 H.264）══
+    if hint_cdn and not ("youtube.com" in real_url or "youtu.be" in real_url):
         yield {"type":"progress","pct":5,"msg":"下載影片..."}
         safe = re.sub(r'[\\/:*?"<>|]', '_', title)[:60]
         gen_h = {
