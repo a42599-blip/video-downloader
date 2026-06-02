@@ -53,7 +53,7 @@ def _load_platform_cookies() -> dict:
         pass
     # 備用：從 Railway 環境變數讀（管理員在 Railway Dashboard 設定的）
     result = {}
-    for plat in ["douyin", "kuaishou", "tiktok"]:
+    for plat in ["douyin", "tiktok"]:
         env_val = os.environ.get(f"{plat.upper()}_COOKIES", "")
         if env_val:
             try:
@@ -65,7 +65,7 @@ def _load_platform_cookies() -> dict:
 def _get_cookies_for_url(url: str) -> list[dict]:
     data = _load_platform_cookies()
     for plat, domain in [
-        ("douyin", "douyin.com"), ("kuaishou", "kuaishou.com"), ("tiktok", "tiktok.com"),
+        ("douyin", "douyin.com"), ("tiktok", "tiktok.com"),
     ]:
         if domain in url:
             return data.get(plat, [])
@@ -244,7 +244,7 @@ def extract_url_from_text(text: str) -> str:
 
 async def resolve_short_url(url: str) -> str:
     text_url = extract_url_from_text(url)
-    SHORT_DOMAINS = ("v.douyin.com", "v.kuaishou.com", "kuaishou.app.link",
+    SHORT_DOMAINS = ("v.douyin.com",
                      "xhslink.com", "t.co", "vm.tiktok.com", "vt.tiktok.com")
     if any(d in text_url for d in SHORT_DOMAINS):
         try:
@@ -268,9 +268,6 @@ DOUYIN_LIB = r"D:\tools\Douyin_TikTok_Download_API"
 
 def _is_douyin(url: str) -> bool:
     return "douyin.com" in url or "douyinvod" in url
-
-def _is_kuaishou(url: str) -> bool:
-    return "kuaishou.com" in url
 
 def _is_shopee_url(url: str) -> bool:
     return any(d in url for d in ("shopee.tw", "shopee.sg", "shopee.vn", "shopee.ph",
@@ -693,82 +690,7 @@ async def _get_douyin_cdn(video_url: str) -> dict:
     return result
 
 
-async def _get_kuaishou_cdn(video_url: str) -> dict:
-    try:
-        from playwright.async_api import async_playwright
-    except ImportError:
-        return {}
 
-    result = {"title": "快手影片", "thumbnail": "", "duration": 0,
-              "uploader": "", "cdn_url": None, "formats": []}
-    try:
-        async with async_playwright() as p:
-            browser = await _pw_browser(p)
-            ctx = await browser.new_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-                viewport={"width": 1280, "height": 800})
-            await _apply_cookies(ctx, video_url)
-            page = await ctx.new_page()
-            await _stealth(page)
-
-            found = asyncio.Event()
-
-            async def on_response(resp):
-                if "kuaishou.com/graphql" not in resp.url:
-                    return
-                try:
-                    body = await resp.json()
-                    data = body.get("data") or {}
-                    photo = None
-                    for key in ("visionVideoDetail", "visionVideoDetailExtra",
-                                "visionVideoDetailOuter", "visionVideoGetPlayInfo"):
-                        obj = data.get(key)
-                        if isinstance(obj, dict):
-                            photo = obj.get("photo") or obj.get("videoInfo") or obj
-                            if photo and (photo.get("mainMvUrls") or photo.get("photoUrl")):
-                                break
-                            photo = None
-                    if not photo:
-                        return
-
-                    cdn = ""
-                    for field in ("mainMvUrls", "photoUrl", "urls", "videoUrl"):
-                        v = photo.get(field)
-                        if isinstance(v, list) and v:
-                            cdn = (v[0].get("url") or v[0].get("cdn") or "")
-                            break
-                        elif isinstance(v, str) and v.startswith("http"):
-                            cdn = v; break
-                    if cdn:
-                        result["cdn_url"] = cdn
-                        found.set()
-
-                    caption = photo.get("caption") or photo.get("title") or ""
-                    if caption: result["title"] = caption[:80]
-                    user = photo.get("user") or photo.get("userInfo") or {}
-                    result["uploader"] = user.get("name","") or user.get("userName","")
-                    covers = photo.get("coverUrls") or photo.get("webpCoverUrls") or []
-                    if covers:
-                        result["thumbnail"] = covers[0].get("url","")
-                    dur = photo.get("duration",0) or 0
-                    result["duration"] = dur // 1000 if dur > 1000 else dur
-                except Exception as ex:
-                    print(f"[kuaishou_cdn] GraphQL parse: {ex}")
-
-            page.on("response", on_response)
-            try:
-                await page.goto(video_url, wait_until="domcontentloaded", timeout=25000)
-                try:
-                    await asyncio.wait_for(found.wait(), timeout=20)
-                except asyncio.TimeoutError:
-                    print("[kuaishou_cdn] 超時：未攔截到 GraphQL 影片 URL")
-            except Exception as ex:
-                print(f"[kuaishou_cdn] page load: {ex}")
-            finally:
-                await page.close(); await ctx.close(); await browser.close()
-    except Exception as ex:
-        print(f"[kuaishou_cdn] 錯誤：{ex}")
-    return result
 
 
 async def _get_tiktok_via_tikwm(url: str) -> dict:
@@ -907,7 +829,7 @@ async def save_cookies(platform: str = Form(...), cookies_json: str = Form(...))
 def cookies_status():
     data = _load_platform_cookies()
     return JSONResponse({
-        plat: len(data.get(plat, [])) for plat in ["douyin", "kuaishou", "tiktok"]
+        plat: len(data.get(plat, [])) for plat in ["douyin", "tiktok"]
     })
 
 @app.delete("/api/cookies/{platform}")
@@ -979,46 +901,7 @@ async def video_info(url: str):
             "formats":       cdn_info.get("formats", []),
         })
 
-    if _is_kuaishou(real_url):
-        from urllib.parse import quote as _q
-        loop_ks = asyncio.get_event_loop()
-        # 先用 yt-dlp（不需要瀏覽器，雲端可用）
-        def _ks_ytdlp():
-            opts_ks = {"quiet":True,"no_warnings":True,"skip_download":True,
-                       "http_headers":{"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}}
-            with yt_dlp.YoutubeDL(opts_ks) as ydl:
-                return ydl.extract_info(real_url, download=False)
-        try:
-            ks_info = await asyncio.wait_for(loop_ks.run_in_executor(executor, _ks_ytdlp), timeout=15)
-            if ks_info and ks_info.get("url"):
-                ks_cdn = ks_info.get("url","")
-                ks_proxy = f"/api/proxy-video?url={_q(ks_cdn, safe='')}&referer=https://www.kuaishou.com/" if ks_cdn else ""
-                return JSONResponse({
-                    "title": ks_info.get("title","快手影片"), "thumbnail": ks_info.get("thumbnail",""),
-                    "duration": ks_info.get("duration",0), "uploader": ks_info.get("uploader",""),
-                    "platform":"Kuaishou","url":real_url,"has_video":bool(ks_cdn),
-                    "proxy_url":ks_proxy,"cdn_url":ks_cdn,
-                    "formats":[{"id":"best","label":"原始畫質","height":0}],
-                })
-        except Exception:
-            pass
-        # fallback：Playwright（本機可用）
-        cdn_info = await _get_kuaishou_cdn(real_url)
-        cdn = cdn_info.get("cdn_url") or ""
-        proxy = f"/api/proxy-video?url={_q(cdn, safe='')}&referer=https://www.kuaishou.com/" if cdn else ""
-        if cdn or cdn_info.get("title","快手影片") != "快手影片":
-            return JSONResponse({
-                "title":     cdn_info.get("title", "快手影片"),
-                "thumbnail": cdn_info.get("thumbnail", ""),
-                "duration":  cdn_info.get("duration", 0),
-                "uploader":  cdn_info.get("uploader", ""),
-                "platform":  "Kuaishou",
-                "url":       real_url,
-                "has_video": bool(cdn),
-                "proxy_url": proxy,
-                "cdn_url":   cdn,
-                "formats":   [{"id":"best","label":"原始畫質","height":0}],
-            })
+
 
     loop = asyncio.get_event_loop()
 
@@ -1207,8 +1090,7 @@ async def video_info(url: str):
             hint = "此影片有地區限制，無法從目前位置觀看"
         elif any(k in el for k in ("not found", "removed", "deleted", "does not exist", "404")):
             hint = "此影片已刪除或不存在"
-        elif _is_kuaishou(real_url):
-            hint = "快手影片解析失敗。如需下載，請至設定頁面貼上快手 Cookies 後再試"
+
         elif "tiktok.com" in real_url:
             hint = "TikTok 影片解析失敗，請至設定頁面貼上 TikTok Cookies"
         return JSONResponse({"error": err_str, "error_hint": hint, "resolved_url": real_url})
@@ -1738,53 +1620,6 @@ async def _dl_progress(real_url: str, title: str, out_dir: Path,
             yield {"type":"error","message":f"抖音下載失敗：{ex}"}
         return
 
-    # ══ 快手 ══════════════════════════════════════════════════════
-    if _is_kuaishou(real_url):
-        yield {"type":"progress","pct":5,"msg":"解析快手影片..."}
-        ks_h = {"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                "Referer":"https://www.kuaishou.com/"}
-
-        # 優先：hint_cdn（預覽時已取得）
-        if hint_cdn:
-            safe = re.sub(r'[\\/:*?"<>|]', '_', title)[:60]
-            fpath = out_dir / f"{safe}.mp4"
-            yield {"type":"progress","pct":10,"msg":"下載快手影片..."}
-            async for evt in httpx_dl(hint_cdn, fpath, ks_h, 10, 95): yield evt
-            if fpath.exists() and fpath.stat().st_size > 50000:
-                yield {"type":"done","filename":fpath.name,"saved_dir":str(out_dir),"size_mb":round(fpath.stat().st_size/1024/1024,1)}
-                return
-
-        # yt-dlp（雲端可用，不需要瀏覽器）
-        yield {"type":"progress","pct":8,"msg":"嘗試 yt-dlp 解析快手..."}
-        res_ks, err_ks = [], []
-        safe = re.sub(r'[\\/:*?"<>|]', '_', title)[:60]
-        opts_ks = {"format":"best[ext=mp4]/best","outtmpl":str(out_dir/f"{safe}.%(ext)s"),
-                   "quiet":True,"no_warnings":True,"merge_output_format":"mp4"}
-        async for evt in ytdlp_dl(opts_ks, real_url, res_ks, err_ks): yield evt
-        if res_ks and Path(res_ks[0]).exists() and Path(res_ks[0]).stat().st_size > 50000:
-            yield {"type":"done","filename":Path(res_ks[0]).name,"saved_dir":str(out_dir),"size_mb":round(Path(res_ks[0]).stat().st_size/1024/1024,1)}
-            return
-
-        # fallback：Playwright（本機）
-        yield {"type":"progress","pct":5,"msg":"啟動瀏覽器解析快手..."}
-        try:
-            ks_info = await _get_kuaishou_cdn(real_url)
-            cdn = ks_info.get("cdn_url") or ""
-            use_title = ks_info.get("title") or title
-            if not cdn:
-                yield {"type":"error","message":"無法取得快手影片（雲端限制，建議貼入快手 Cookies）"}
-                return
-            safe2 = re.sub(r'[\\/:*?"<>|]', '_', use_title)[:60]
-            fpath2 = out_dir / f"{safe2}.mp4"
-            async for evt in httpx_dl(cdn, fpath2, ks_h, 10, 95): yield evt
-            sz = fpath2.stat().st_size if fpath2.exists() else 0
-            if sz > 50000:
-                yield {"type":"done","filename":fpath2.name,"saved_dir":str(out_dir),"size_mb":round(sz/1024/1024,1)}
-                return
-            yield {"type":"error","message":"快手下載失敗，請重新解析"}
-        except Exception as ex:
-            yield {"type":"error","message":f"快手下載失敗：{ex}"}
-        return
 
     # ══ 蝦皮短影音 ══════════════════════════════════════════════
     if _is_shopee_url(real_url):
