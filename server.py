@@ -427,6 +427,27 @@ async def _get_douyin_fast(url: str) -> dict:
     except Exception as e:
         print(f"[douyin_fast/wtf] {e}")
 
+    # ── 方法 3：snaptik.app 公開 API（備用）────────────────────
+    try:
+        async with httpx.AsyncClient(timeout=12, follow_redirects=True) as client:
+            r = await client.post("https://snaptik.app/action-2025.php",
+                data={"url": url, "lang": "en"},
+                headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                    "Content-Type": "application/x-www-form-urlencoded",
+                })
+            import re as _re
+            # 從 HTML 回應中解析 CDN URL
+            cdn_m = _re.search(r'https?://[^"\'<>]+?\.mp4[^"\'<>]*', r.text)
+            if cdn_m:
+                return {
+                    "title": "抖音影片", "thumbnail": "",
+                    "duration": 0, "uploader": "",
+                    "cdn_url": cdn_m.group(0), "cdn_audio_url": "",
+                }
+    except Exception as e:
+        print(f"[douyin_fast/snaptik] {e}")
+
     return {}
 
 async def _get_douyin_info_api(aweme_id: str) -> dict:
