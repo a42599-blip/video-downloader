@@ -360,7 +360,7 @@ function restoreState(){
     renderPreview(d);
   }catch(e){}
 }
-function setSt(h){ const e=document.getElementById('st-url'); e.innerHTML=h; e.style.display=h?'block':'none'; hideProgress(); }
+function setSt(h){ const e=document.getElementById('st-url'); e.innerHTML=h; e.style.display=h?'block':'none'; }
 function showProgress(step,total,msg){
   const w=document.getElementById('progress-wrap');
   const s=document.getElementById('progress-step');
@@ -592,10 +592,11 @@ async function fetchUrl(){
     showProgress(4,5,'解析完成，處理資料...');
     const d=await r.json();
     if(d.error){
-      // 不要直接顯示嚇人的錯誤訊息，改為較友善的提示
+      showProgress(5,5,'❌ 解析失敗');
+      setTimeout(()=>hideProgress(),2000);
       const friendly=d.error_hint||'';
       if(friendly.includes('不支援')||friendly.includes('不支持')){
-        setSt('⚠️ 正在努力解析中，若持續失敗請確認網址正確');
+        setSt('⚠️ 此平台暫時無法解析，請確認網址正確');
       } else {
         setSt('⚠️ '+friendly||'解析較慢，請稍後再試');
       }
@@ -638,7 +639,7 @@ async function fetchUrl(){
     const canDownload=!!(d.cdn_url||d.proxy_url||(d.formats&&d.formats.length));
     document.getElementById('btn-udl').disabled=!canDownload;
     document.getElementById('btn-udl').textContent=canDownload?'⬇️ 去水印下載':'❌ 無法下載（需要登入 Cookies）';
-    if(!d.error_hint){ showProgress(5,5,'✅ 解析完成'); setTimeout(hideProgress,800); }
+    if(!d.error_hint){ showProgress(5,5,'✅ 解析完成'); setTimeout(hideProgress,1500); }
     saveState();
   }catch(e){
     if(e.name==='AbortError') return;

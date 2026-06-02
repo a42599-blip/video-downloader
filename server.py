@@ -94,12 +94,14 @@ def _is_lux_platform(url: str) -> bool:
 
 # ── Invidious 公開實例（YouTube 替代前端，雲端 IP 不被封）──────
 INVIDIOUS_INSTANCES = [
+    "https://inv.tux.pizza",
     "https://invidious.io.lol",
     "https://yewtu.be",
-    "https://inv.tux.pizza",
     "https://invidious.privacyredirect.com",
     "https://iv.datura.network",
     "https://invidious.nerdvpn.de",
+    "https://invidious.slipfox.xyz",
+    "https://youtube.owacon.dev",
 ]
 
 def _extract_youtube_id(url: str) -> str:
@@ -113,7 +115,7 @@ async def _get_youtube_via_invidious(url: str) -> dict:
         return {}
     for instance in INVIDIOUS_INSTANCES:
         try:
-            async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
+            async with httpx.AsyncClient(timeout=5, follow_redirects=True) as client:
                 resp = await client.get(f"{instance}/api/v1/videos/{vid_id}",
                                         params={"fields": "title,author,lengthSeconds,videoThumbnails,formatStreams,adaptiveFormats"})
                 if resp.status_code != 200:
