@@ -1154,7 +1154,7 @@ async def video_info(url: str):
         return JSONResponse({"title": info.get("title",""), "thumbnail": info.get("thumbnail",""),
                              "duration": info.get("duration",0), "uploader": info.get("uploader",""),
                              "platform": info.get("extractor_key",""), "url": real_url,
-                             "proxy_url": proxy_url, "cdn_url": "",
+                             "proxy_url": proxy_url, "cdn_url": best_cdn,
                              "cdn_audio_url": cdn_audio,
                              "formats": yt_formats})
     except Exception as ex:
