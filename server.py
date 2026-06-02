@@ -842,73 +842,77 @@ query visionVideoDetail($photoId: String, $page: String, $type: String) {
 """
 
 async def _get_kuaishou_direct(url: str) -> dict:
-    """直接打 Kuaishou GraphQL API，不走 yt-dlp 或 Playwright"""
-    # 從 URL 提取 photoId
-    photo_m = re.search(r'(?:short-video|photo|v)/([a-zA-Z0-9]+)', url)
-    if not photo_m:
-        return {}
-    photo_id = photo_m.group(1)
-    
-    for page_val in ("home", "search"):
-        try:
-            async with httpx.AsyncClient(timeout=15, headers=_KUAISHOU_HEADERS, follow_redirects=True) as client:
-                payload = {
-                    "operationName": "visionVideoDetail",
-                    "variables": {"photoId": photo_id, "page": page_val, "type": "short_video"},
-                    "query": _KUAISHOU_QUERY,
-                }
-                resp = await client.post("https://www.kuaishou.com/graphql", json=payload)
-                if resp.status_code != 200:
-                    continue
-                d = resp.json()
-                data = d.get("data", {}) or {}
-                detail = data.get("visionVideoDetail", {}) or {}
-                photo = detail.get("photo") or {}
-                if not photo or not photo.get("id"):
-                    continue
-                
-                title = photo.get("caption", "快手影片") or "快手影片"
-                duration = photo.get("duration", 0) or 0
-                
-                # 取 CDN URL
-                cdn = ""
-                mv_urls = photo.get("mainMvUrls") or []
-                if mv_urls and isinstance(mv_urls, list):
-                    cdn = mv_urls[0].get("url", "") or ""
-                if not cdn:
-                    cdn = photo.get("photoUrl", "") or ""
-                if not cdn:
-                    continue
-                
-                # 取縮圖
-                thumb = ""
-                covers = photo.get("coverUrls") or []
-                if covers and isinstance(covers, list):
-                    thumb = covers[0].get("url", "") or ""
-                
-                # 取上傳者
-                user = photo.get("user") or {}
-                uploader = user.get("userName", "") or ""
-                
-                duration_sec = duration // 1000 if duration > 1000 else duration
-                
-                print(f"[kuaishou_direct] OK photo_id={photo_id}")
-                return {
-                    "title": title[:80],
-                    "thumbnail": thumb,
-                    "duration": duration_sec,
-                    "uploader": uploader,
-                    "cdn_url": cdn,
-                    "platform": "Kuaishou",
-                    "formats": [{"id": "best", "label": "原始畫質", "height": 0}],
-                }
-        except Exception as ex:
-            print(f"[kuaishou_direct] {page_val} 失敗: {ex}")
-            continue
-    
-    # fallback：使用 tikwm（POST，跟抖音一樣的方式）
+    """直接抓快手頁面 HTML 解析影片 URL，不走 yt-dlp 或 Playwright"""
+    ks_headers = {
+        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+        "Referer": "https://www.kuaishou.com/",
+        "Accept-Language": "zh-CN,zh;q=0.9",
+    }
     try:
-        async with httpx.AsyncClient(timeout=12, follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=15, follow_redirects=True, headers=ks_headers) as client:
+            r = await client.get(url)
+            html = r.text
+        
+        # 從 HTML 中找影片 URL (og:video、video tag src、JSON data 等)
+        patterns = [
+            r'<meta[^>]+property="og:video"[^>]+content="([^"]+)"',
+            r'<meta[^>]+property="og:video:url"[^>]+content="([^"]+)"',
+            r'<video[^>]+src="([^"]+\.mp4[^"]*)"',
+            r'"srcUrl"\s*:\s*"([^"]+\.mp4[^"]*)"',
+            r'"url"\s*:\s*"(https?://[^"]+\.mp4[^"]*)"',
+            r'"playUrl"\s*:\s*"([^"]+\.mp4[^"]*)"',
+        ]
+        cdn = ""
+        for pat in patterns:
+            m = re.search(pat, html)
+            if m:
+                url_str = m.group(1).replace("\\u0026", "&").replace("&amp;", "&")
+                if url_str.startswith("http") and ".mp4" in url_str:
+                    cdn = url_str
+                    break
+        
+        if not cdn:
+            # fallback: 從 JSON-LD 找
+            jm = re.search(r'<script type="application/ld\+json">(.*?)</script>', html, re.DOTALL)
+            if jm:
+                try:
+                    ld = json.loads(jm.group(1))
+                    cdn = ld.get("contentUrl", "") or ld.get("video", {}).get("contentUrl", "") or ""
+                except:
+                    pass
+        
+        if not cdn:
+            # 從任意 video/mp4 URL 中找
+            all_mp4 = re.findall(r'(https?://[^"\'<>\s]+\.mp4[^"\'<>\s]*)', html)
+            if all_mp4:
+                # 跳過明顯不是影片的 URL
+                for u in all_mp4:
+                    if "kuaishou.com" not in u and "video" in u.lower():
+                        cdn = u
+                        break
+                if not cdn:
+                    cdn = all_mp4[0]
+        
+        title_m = re.search(r'<meta[^>]+og:title[^>]+content="([^"]+)"', html)
+        thumb_m = re.search(r'<meta[^>]+og:image[^>]+content="([^"]+)"', html)
+        title = (title_m.group(1) if title_m else "快手影片")[:80]
+        thumb = thumb_m.group(1) if thumb_m else ""
+        
+        if cdn and cdn != url:
+            print(f"[kuaishou_html] OK cdn={cdn[:80]}...")
+            return {
+                "title": title, "thumbnail": thumb,
+                "duration": 0, "uploader": "",
+                "cdn_url": cdn, "cdn_audio_url": "",
+                "platform": "Kuaishou",
+                "formats": [{"id": "best", "label": "原始畫質", "height": 0}],
+            }
+    except Exception as ex:
+        print(f"[kuaishou_html] {ex}")
+    
+    # fallback：使用 tikwm（POST）
+    try:
+        async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
             r = await client.post("https://tikwm.com/api/",
                 data={"url": url, "hd": "1"},
                 headers={"User-Agent": "Mozilla/5.0"})
@@ -916,7 +920,7 @@ async def _get_kuaishou_direct(url: str) -> dict:
             if d.get("code") == 0 and d.get("data"):
                 dat = d["data"]
                 cdn = dat.get("hdplay") or dat.get("play") or ""
-                if cdn:
+                if cdn and cdn != url:
                     return {
                         "title": (dat.get("title", "快手影片") or "")[:80],
                         "thumbnail": dat.get("cover", "") or dat.get("origin_cover", "") or "",
