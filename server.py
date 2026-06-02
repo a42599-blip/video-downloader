@@ -576,7 +576,9 @@ async def _get_douyin_info_api(aweme_id: str) -> dict:
 
 async def _pw_browser(p):
     _args = ["--no-sandbox", "--disable-blink-features=AutomationControlled",
-             "--autoplay-policy=no-user-gesture-required"]
+             "--autoplay-policy=no-user-gesture-required",
+             "--disable-dev-shm-usage", "--disable-gpu",
+             "--no-zygote", "--single-process"]
     # 本機 Windows：優先用 Edge
     if os.path.exists(EDGE_PATH):
         try:
@@ -739,7 +741,7 @@ async def _get_douyin_cdn(video_url: str) -> dict:
                 pass
 
             try:
-                await asyncio.wait_for(found.wait(), timeout=12)
+                await asyncio.wait_for(found.wait(), timeout=18)
             except asyncio.TimeoutError:
                 pass
 
@@ -947,7 +949,7 @@ async def video_info(url: str):
         # 快速 API 失敗 → 改用 Playwright（Railway 已安裝 Chromium）
         from urllib.parse import quote as _q3
         try:
-            cdn_info = await asyncio.wait_for(_get_douyin_cdn(real_url), timeout=20)
+            cdn_info = await asyncio.wait_for(_get_douyin_cdn(real_url), timeout=45)
         except:
             cdn_info = {}
         cdn = cdn_info.get("cdn_url") or ""
