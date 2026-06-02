@@ -199,13 +199,18 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
         </div>
       </div>
       <div class="hero-btns">
-        <button class="hero-btn" id="btn-ck" onclick="toggleCookies()" style="font-size:0.72rem;padding:6px 10px;opacity:0.5">⚙️ 設定</button>
+        <button class="hero-btn" id="btn-ck" onclick="toggleCookies()" style="font-size:0.72rem;padding:6px 10px;opacity:0.5">⚙️ <span data-i18n="btnSettings">設定</span></button>
+        <select onchange="switchLang(this.value)" style="background:#0d2420;color:#99f6e4;border:1px solid #14b8a6;border-radius:6px;padding:4px 6px;font-size:0.7rem;cursor:pointer">
+          <option value="zh-TW">繁體中文</option>
+          <option value="zh-CN">简体中文</option>
+          <option value="en">English</option>
+        </select>
       </div>
     </div>
     <div class="plt-badges">
-      <span class="pbadge pb-dy">抖音</span>
+      <span class="pbadge pb-dy" data-i18n="dy">抖音</span>
       <span class="pbadge pb-tk">TikTok</span>
-      <span class="pbadge pb-ks">快手</span>
+
       <span class="pbadge pb-bi">B站</span>
       <span class="pbadge pb-yt">YouTube</span>
       <span class="pbadge pb-xhs">小紅書</span>
@@ -223,7 +228,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
       <div class="card-ico">🔗</div>
       <div>
         <div class="card-name">貼上影片連結</div>
-        <div class="card-hint">抖音 · TikTok · 快手 · B站 · YouTube · 小紅書 · 蝦皮 — 支援分享文字直接貼上</div>
+        <div class="card-hint" data-i18n="cardHint">抖音 · TikTok · B站 · YouTube · 小紅書 · 蝦皮 — 支援分享文字直接貼上</div>
       </div>
     </div>
 
@@ -304,7 +309,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
         <div style="font-size:0.8rem;color:#5eead4;font-weight:600;margin-bottom:6px">選擇平台</div>
         <select class="sel" id="ck-platform" style="margin-bottom:8px">
           <option value="douyin">抖音 (douyin.com)</option>
-          <option value="kuaishou">快手 (kuaishou.com)</option>
+
           <option value="tiktok">TikTok (tiktok.com)</option>
         </select>
         <textarea class="inp" id="ck-json" placeholder='貼上 Cookie Editor 匯出的 JSON' rows="5" style="resize:vertical;font-size:0.72rem;font-family:monospace;line-height:1.4"></textarea>
@@ -338,6 +343,40 @@ function agreeDisclaimer(){
   document.getElementById('disc-modal').classList.add('hide');
 }
 (function(){ if(!localStorage.getItem('dl_disclaimer')) document.getElementById('disc-modal').classList.remove('hide'); })();
+
+// ── 三語翻譯系統 ──
+const LANG_DATA={
+  "zh-TW":{
+    title:"去水印下載工具",subtitle:"貼上連結 · 一鍵去水印下載",inputPlaceholder:"貼上影片連結或抖音/TikTok 分享文字（整段貼上即可，自動解析）",btnPaste:"📋 貼上並解析",btnParse:"🔍 開始解析",btnDownload:"⬇️ 去水印下載",btnSettings:"⚙️ 設定",btnAgree:"同意並繼續使用",cardName:"貼上影片連結",cardHint:"抖音 · TikTok · 快手 · B站 · YouTube · 小紅書 · 蝦皮 — 支援分享文字直接貼上",step:"步驟",progressUrl:"解析網址中...",progressConnect:"正在連線目標平台...",progressFetch:"正在取得影片資訊...",progressDone:"✅ 解析完成",progressFail:"❌ 解析失敗",noDownloads:"尚無已下載影片",downloading:"下載中...",preparing:"準備中...",disclaimerTitle:"使用須知",disclaimerP1:"本工具僅供個人合法用途使用，例如下載自己擁有版權的內容、或在各平台明確允許下載的公開影片。",disclaimerLi1:"本工具不儲存任何使用者影片或個人資料",disclaimerLi2:"下載行為由使用者自行負責，請遵守各國著作權法及各平台服務條款",disclaimerLi3:"本工具開發者不對任何使用者的下載行為承擔法律責任",disclaimerAgree:"我已閱讀並同意上述條款，且確認我的使用符合當地法律",settingTitle:"🍪 平台 Cookies 設定",settingWhy:"為什麼需要 Cookies？",settingWhyText:"抖音／快手／TikTok 會封鎖無登入的請求。貼上你的帳號 Cookies 後，工具能正常解析。",settingHow:"做法：",settingHowText:"在 Edge 安裝「Cookie Editor」→ 登入平台 → 點擴充圖示 → Export → 複製貼到下方。",settingPlatform:"選擇平台",settingSave:"✅ 儲存 Cookies",settingClear:"🗑️ 清除",needLogin:"無法下載（需要登入 Cookies）",errorRetry:"⚠️ 正在努力解析中，若持續失敗請確認網址正確",errorSlow:"⚠️ 解析較慢，請稍後再試",errorTimeout:"⚠️ 連線較慢，請確認網路後再試",errorNoPreview:"⚠️ 此平台不支援直接預覽，但仍可去水印下載",toastEmpty:"請先貼上網址或分享文字",toastNoUrl:"找不到有效網址，請確認貼上內容包含 http",downloadMobile:"⬇️ 下載中，請查看通知列...",downloadSavePhoto:"儲存到照片",downloadSaveVideo:"儲存影片/下載",downloadSent:"✅ 已送出",downloadRetry:"🔄 重試",downloadCancel:"已取消，可再次點擊重試",langZhTW:"繁體中文",langZhCN:"简体中文",langEN:"English",
+  },
+  "zh-CN":{
+    title:"去水印下载工具",subtitle:"贴上链接 · 一键去水印下载",inputPlaceholder:"贴上影片链接或抖音/TikTok 分享文字（整段贴上即可，自动解析）",btnPaste:"📋 贴上并解析",btnParse:"🔍 开始解析",btnDownload:"⬇️ 去水印下载",btnSettings:"⚙️ 设置",btnAgree:"同意并继续使用",cardName:"贴上影片链接",cardHint:"抖音 · TikTok · 快手 · B站 · YouTube · 小红书 · 虾皮 — 支持分享文字直接贴上",step:"步骤",progressUrl:"解析网址中...",progressConnect:"正在连线目标平台...",progressFetch:"正在取得影片信息...",progressDone:"✅ 解析完成",progressFail:"❌ 解析失败",noDownloads:"暂无已下载影片",downloading:"下载中...",preparing:"准备中...",disclaimerTitle:"使用须知",disclaimerP1:"本工具仅供个人合法用途使用，例如下载自己拥有版权的内容、或在各平台明确允许下载的公开影片。",disclaimerLi1:"本工具不储存任何使用者影片或个人资料",disclaimerLi2:"下载行为由使用者自行负责，请遵守各国著作权法及各平台服务条款",disclaimerLi3:"本工具开发者不对任何使用者的下载行为承担法律责任",disclaimerAgree:"我已阅读并同意上述条款，且确认我的使用符合当地法律",settingTitle:"🍪 平台 Cookies 设置",settingWhy:"为什么需要 Cookies？",settingWhyText:"抖音／快手／TikTok 会封锁无登录的请求。贴上你的账号 Cookies 后，工具能正常解析。",settingHow:"做法：",settingHowText:"在 Edge 安装「Cookie Editor」→ 登录平台 → 点扩充图示 → Export → 复制贴到下方。",settingPlatform:"选择平台",settingSave:"✅ 储存 Cookies",settingClear:"🗑️ 清除",needLogin:"无法下载（需要登录 Cookies）",errorRetry:"⚠️ 正在努力解析中，若持续失败请确认网址正确",errorSlow:"⚠️ 解析较慢，请稍后再试",errorTimeout:"⚠️ 连线较慢，请确认网络后再试",errorNoPreview:"⚠️ 此平台不支持直接预览，但仍可去水印下载",toastEmpty:"请先贴上网址或分享文字",toastNoUrl:"找不到有效网址，请确认贴上内容包含 http",downloadMobile:"⬇️ 下载中，请查看通知列...",downloadSavePhoto:"保存到照片",downloadSaveVideo:"保存影片/下载",downloadSent:"✅ 已送出",downloadRetry:"🔄 重试",downloadCancel:"已取消，可再次点击重试",langZhTW:"繁體中文",langZhCN:"简体中文",langEN:"English",
+  },
+  "en":{
+    title:"Watermark Remover",subtitle:"Paste link · Remove watermark with one click",inputPlaceholder:"Paste video link or Douyin/TikTok share text (auto-detect)",btnPaste:"📋 Paste & Parse",btnParse:"🔍 Parse",btnDownload:"⬇️ Download (No Watermark)",btnSettings:"⚙️ Settings",btnAgree:"I Agree & Continue",cardName:"Paste video link",cardHint:"Douyin · TikTok · Kuaishou · Bilibili · YouTube · Xiaohongshu · Shopee",step:"Step",progressUrl:"Parsing URL...",progressConnect:"Connecting to platform...",progressFetch:"Fetching video info...",progressDone:"✅ Complete",progressFail:"❌ Failed",noDownloads:"No downloads yet",downloading:"Downloading...",preparing:"Preparing...",disclaimerTitle:"Terms of Use",disclaimerP1:"This tool is for personal legal use only, such as downloading your own copyrighted content or public videos from platforms that explicitly allow downloading.",disclaimerLi1:"We do not store any user videos or personal data",disclaimerLi2:"Users are solely responsible for their downloads",disclaimerLi3:"The developer assumes no legal liability",disclaimerAgree:"I have read and agree to the terms above",settingTitle:"🍪 Platform Cookies",settingWhy:"Why Cookies?",settingWhyText:"Douyin/Kuaishou/TikTok block unauthenticated requests. Set your cookies to enable parsing.",settingHow:"How:",settingHowText:"Install 'Cookie Editor' in Edge → Login → Click extension → Export → Paste below.",settingPlatform:"Select platform",settingSave:"✅ Save Cookies",settingClear:"🗑️ Clear",needLogin:"Cannot download (needs login Cookies)",errorRetry:"⚠️ Parsing, please try again if it persists",errorSlow:"⚠️ Slow connection, please wait...",errorTimeout:"⚠️ Connection timeout, please check your network",errorNoPreview:"⚠️ Preview not available, but you can still download",toastEmpty:"Please paste a URL first",toastNoUrl:"No valid URL found",downloadMobile:"⬇️ Downloading, check notification bar...",downloadSavePhoto:"Save to Photos",downloadSaveVideo:"Save Video/Download",downloadSent:"✅ Sent",downloadRetry:"🔄 Retry",downloadCancel:"Cancelled, tap to retry",langZhTW:"繁體中文",langZhCN:"简体中文",langEN:"English",
+  },
+};
+let _currentLang=localStorage.getItem('vd_lang')||'zh-TW';
+function __(key){ return LANG_DATA[_currentLang]?.[key]||LANG_DATA['zh-TW'][key]||key; }
+function switchLang(lang){
+  if(!LANG_DATA[lang]) return;
+  _currentLang=lang;
+  localStorage.setItem('vd_lang',lang);
+  document.documentElement.lang=lang;
+  // 更新靜態元素
+  document.querySelectorAll('[data-i18n]').forEach(el=>{
+    const key=el.getAttribute('data-i18n');
+    if(key) el.textContent=__(key);
+  });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el=>{
+    const key=el.getAttribute('data-i18n-placeholder');
+    if(key) el.placeholder=__(key);
+  });
+  document.title=__('title');
+}
+// 初始化語言
+switchLang(_currentLang);
+document.querySelectorAll('select[onchange*="switchLang"]').forEach(s=>{ s.value=_currentLang; });
 
 /* ── 工具函數 ── */
 function toast(m,err=false){ const t=document.createElement('div'); t.className='toast'+(err?' err':''); t.textContent=m; document.body.appendChild(t); setTimeout(()=>t.remove(),3500); }
@@ -774,7 +813,7 @@ async function loadCookieStatus(){
   try{
     const r=await fetch(API+'/api/cookies/status');
     const d=await r.json();
-    const labels={'douyin':'抖音','kuaishou':'快手','tiktok':'TikTok'};
+    const labels={'douyin':'抖音','tiktok':'TikTok'};
     document.getElementById('ck-status').innerHTML=Object.keys(labels).map(p=>`
       <span style="padding:3px 10px;border-radius:12px;font-size:0.7rem;background:${d[p]>0?'#042f2e':'#141414'};border:1px solid ${d[p]>0?'#0d9488':'#252525'};color:${d[p]>0?'#5eead4':'#4b5563'}">
         ${labels[p]}: ${d[p]>0?d[p]+'個 ✅':'未設定'}
