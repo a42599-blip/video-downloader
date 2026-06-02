@@ -22,7 +22,7 @@ from re import compile
 from time import time
 from urllib.parse import urlencode
 from urllib.parse import quote
-from gmssl import sm3, func
+import hashlib
 
 __all__ = ["ABogus", ]
 
@@ -541,8 +541,8 @@ class ABogus:
         else:
             b = bytes(data)  # 将 List[int] 转换为字节数组
 
-        # 将字节数组转换为适合 sm3.sm3_hash 函数处理的列表格式
-        h = sm3.sm3_hash(func.bytes_to_list(b))
+        # 使用 Python 內建 hashlib.sm3 計算雜湊（Python 3.12+）
+        h = hashlib.new('sm3', b).hexdigest()
 
         # 将十六进制字符串结果转换为十进制整数列表
         return [int(h[i: i + 2], 16) for i in range(0, len(h), 2)]
