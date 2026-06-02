@@ -933,8 +933,19 @@ async def video_info(url: str):
                 "cdn_audio_url": "",
                 "formats":       [{"id":"best","label":"原始畫質","height":0}],
             })
-        # 快速 API 全失敗，回傳錯誤（Playwright 在雲端跑不動）
-        return JSONResponse({"error":"抖音解析失敗，請稍後重試","error_hint":"抖音 API 暫時無法連線，請過幾秒再試","url":real_url})
+        # 快速 API 全失敗 → 不回傳錯誤，讓前端啟用下載按鈕
+        # 下載時會透過 yt-dlp / API 再次嘗試取得影片
+        dy_aweme_id = _parse_aweme_id(real_url) or ""
+        return JSONResponse({
+            "title": "抖音影片", "thumbnail": "",
+            "duration": 0, "uploader": "",
+            "platform": "Douyin", "url": real_url,
+            "has_video": False, "proxy_url": "",
+            "cdn_url": "", "cdn_audio_url": "",
+            "aweme_id": dy_aweme_id,
+            "formats": [],
+            "_note": "快速解析失敗，仍可嘗試下載（下載時會改用 yt-dlp）",
+        })
 
     loop = asyncio.get_event_loop()
 
