@@ -743,7 +743,7 @@ async function loadDls(){
   try{
     const r=await fetch(API+'/api/downloads?device_id='+encodeURIComponent(getDeviceId()));
     const d=await r.json();
-    if(!d.length){ el.innerHTML='<div class="dls-empty">尚無已下載影片</div>'; return; }
+    if(!d.length){ el.innerHTML='<div class="dls-empty">'+__('noDownloads')+'</div>'; return; }
     el.innerHTML='<div class="dls-grid">'+d.map(f=>`
       <div class="dl-card" onclick="openDlVideo('${esc(API+f.url)}','${esc(f.name)}','${f.size_mb}')">
         <div class="dl-thumb-wrap">
@@ -755,7 +755,7 @@ async function loadDls(){
           <div class="dl-fmeta"><span>${f.size_mb} MB</span><span style="color:#0d9488">▶</span></div>
         </div>
       </div>`).join('')+'</div>';
-  }catch(e){ el.innerHTML='<div class="dls-empty">載入失敗</div>'; }
+  }catch(e){ el.innerHTML='<div class="dls-empty">'+__('toastEmpty')+'</div>'; }
 }
 
 function openDlVideo(url,name,sizeMb){
