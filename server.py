@@ -301,7 +301,7 @@ async def _get_shopee_video_info(url: str) -> dict:
         "Accept-Language": "zh-TW,zh;q=0.9",
         "Referer": "https://shopee.tw/",
     }
-    async with httpx.AsyncClient(follow_redirects=True, timeout=20, headers=headers) as c:
+    async with httpx.AsyncClient(follow_redirects=True, timeout=8, headers=headers) as c:
         r0 = await c.get(url)
         final_url = str(r0.url)
 
@@ -316,9 +316,14 @@ async def _get_shopee_video_info(url: str) -> dict:
     if "sv.shopee" not in video_page_url and "share-video" not in video_page_url:
         return {}
 
-    async with httpx.AsyncClient(timeout=20, headers=headers) as c:
-        r = await c.get(video_page_url)
-        html = r.text
+    # 只讀 HTML 前 150KB，加快速度
+    html = ""
+    async with httpx.AsyncClient(timeout=8, headers=headers) as c:
+        async with c.stream("GET", video_page_url) as r:
+            async for chunk in r.aiter_bytes():
+                html += chunk.decode("utf-8", errors="ignore")
+                if len(html) > 150000:
+                    break
 
     mp4_urls = re.findall(r"https?://[^\s\"'<>]+\.mp4[^\s\"'<>]*", html)
     if not mp4_urls:
