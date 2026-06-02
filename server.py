@@ -1154,7 +1154,7 @@ async def video_info(url: str):
         return JSONResponse({"title": info.get("title",""), "thumbnail": info.get("thumbnail",""),
                              "duration": info.get("duration",0), "uploader": info.get("uploader",""),
                              "platform": info.get("extractor_key",""), "url": real_url,
-                             "proxy_url": proxy_url, "cdn_url": best_cdn,
+                             "proxy_url": proxy_url, "cdn_url": "",
                              "cdn_audio_url": cdn_audio,
                              "formats": yt_formats})
     except Exception as ex:
@@ -1842,7 +1842,8 @@ async def _dl_progress(real_url: str, title: str, out_dir: Path,
         opts_yt = {"format":"bestvideo[ext=mp4][vcodec^=avc1]+bestaudio[ext=m4a]/best[ext=mp4]/best",
                    "outtmpl":str(out_dir/f"{safe_yt}.%(ext)s"),"quiet":True,"no_warnings":True,
                    "merge_output_format":"mp4","concurrent_fragment_downloads":8,"updatetime":False,
-                   "postprocessor_args":{"default":["-map_metadata","-1"]},
+                   "embedmetadata":True,
+                   "postprocessor_args":{"default":["-map_metadata","-1","-movflags","+faststart"]},
                    "extractor_args":{"youtube":{"player_client":["android","android_embedded","web"]}}}
         res_yt, err_yt = [], []
         async for evt in ytdlp_dl(opts_yt, real_url, res_yt, err_yt): yield evt
