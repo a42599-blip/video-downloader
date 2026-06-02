@@ -63,6 +63,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 .spin{display:inline-block;width:14px;height:14px;border:2px solid #0d2420;border-top-color:#14b8a6;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:5px}
 @keyframes spin{to{transform:rotate(360deg)}}
 
+/* progress bar */
+.progress-wrap{background:#091a18;border:1px solid #0d2420;border-radius:8px;padding:10px 12px;margin:6px 0;display:none}
+.progress-bar{height:4px;background:#0d2420;border-radius:2px;overflow:hidden;margin-top:8px}
+.progress-fill{height:100%;width:0%;background:linear-gradient(90deg,#14b8a6,#0d9488);border-radius:2px;transition:width .5s ease}
+.progress-step{font-size:0.75rem;color:#5b8a84;margin-bottom:4px}
+.progress-msg{font-size:0.82rem;color:#99f6e4;display:flex;align-items:center;gap:6px}
+.progress-dot{display:inline-block;width:6px;height:6px;background:#14b8a6;border-radius:50%;animation:pulse 1.2s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
 /* preview */
 .preview{background:#060f0f;border:1px solid #0d2420;border-radius:10px;overflow:hidden;display:none;margin-bottom:12px}
 .preview video,.preview img{width:100%;max-height:55vw;object-fit:cover;background:#000;display:block}
@@ -226,6 +235,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
     </div>
 
     <div id="st-url" class="st" style="display:none"></div>
+    <div class="progress-wrap" id="progress-wrap">
+      <div class="progress-step" id="progress-step">步驟 1/4</div>
+      <div class="progress-msg" id="progress-msg"><span class="progress-dot"></span> 解析網址中...</div>
+      <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+    </div>
 
     <!-- 預覽區 -->
     <div class="preview" id="preview">
@@ -330,7 +344,18 @@ function toast(m,err=false){ const t=document.createElement('div'); t.className=
 function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function fmtD(s){ if(!s) return ''; const m=Math.floor(s/60),sc=s%60; return `${m}:${String(sc).padStart(2,'0')}`; }
 function isMobile(){ return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)||window.innerWidth<600; }
-function setSt(h){ const e=document.getElementById('st-url'); e.innerHTML=h; e.style.display=h?'block':'none'; }
+function setSt(h){ const e=document.getElementById('st-url'); e.innerHTML=h; e.style.display=h?'block':'none'; hideProgress(); }
+function showProgress(step,total,msg){
+  const w=document.getElementById('progress-wrap');
+  const s=document.getElementById('progress-step');
+  const m=document.getElementById('progress-msg');
+  const f=document.getElementById('progress-fill');
+  w.style.display='block';
+  s.textContent=`步驟 ${step}/${total}`;
+  m.innerHTML=`<span class="progress-dot"></span> ${msg}`;
+  f.style.width=Math.round(step/total*100)+'%';
+}
+function hideProgress(){ document.getElementById('progress-wrap').style.display='none'; }
 function getDeviceId(){ let id=localStorage.getItem('dl_device_id'); if(!id){ id=crypto.randomUUID(); localStorage.setItem('dl_device_id',id); } return id; }
 function extractUrl(text){ const m=text.match(/https?:\/\/[^\s一-鿿＀-￯　-〿⺀-⻿]+/); if(m) return m[0].replace(/[,，。！？、]+$/,''); return text.trim(); }
 function getSavePath(){ return isMobile()?'':localStorage.getItem('dl_save_path')||''; }
@@ -541,11 +566,14 @@ async function fetchUrl(){
   if(_fetchAbort){ _fetchAbort.abort(); _fetchAbort=null; }
   _fetchAbort=new AbortController();
 
-  setSt('<span class="spin"></span>讀取影片資訊...');
+  showProgress(1,5,'解析網址中...');
   resetPreview();
   document.getElementById('btn-parse').disabled=true;
+  setTimeout(()=>showProgress(2,5,'正在連線目標平台...'),300);
   try{
+    showProgress(3,5,'正在取得影片資訊...');
     const r=await fetch(API+'/api/video-info?url='+encodeURIComponent(url),{signal:_fetchAbort.signal});
+    showProgress(4,5,'解析完成，處理資料...');
     const d=await r.json();
     if(d.error){ setSt(d.error_hint||'讀取失敗：'+d.error); return; }
     if(d.error_hint){ setSt('⚠️ '+d.error_hint); } else { setSt(''); }
@@ -584,7 +612,7 @@ async function fetchUrl(){
     const canDownload=!!(d.cdn_url||d.proxy_url||(d.formats&&d.formats.length));
     document.getElementById('btn-udl').disabled=!canDownload;
     document.getElementById('btn-udl').textContent=canDownload?'⬇️ 去水印下載':'❌ 無法下載（需要登入 Cookies）';
-    if(!d.error_hint) setSt('');
+    if(!d.error_hint){ showProgress(5,5,'✅ 解析完成'); setTimeout(hideProgress,800); }
   }catch(e){
     if(e.name==='AbortError') return;
     setSt('連線失敗：'+e.message);
