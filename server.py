@@ -770,6 +770,99 @@ async def _get_kuaishou_cdn(video_url: str) -> dict:
         print(f"[kuaishou_cdn] 錯誤：{ex}")
     return result
 
+# ── 快手直連 API（不需要瀏覽器，直接打 GraphQL）──────────────────
+_KUAISHOU_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+    "Referer": "https://www.kuaishou.com/",
+    "Content-Type": "application/json",
+}
+
+_KUAISHOU_QUERY = """
+query visionVideoDetail($photoId: String, $page: String, $type: String) {
+  visionVideoDetail(photoId: $photoId, page: $page, type: $type) {
+    status
+    photo {
+      id
+      caption
+      duration
+      height
+      width
+      coverUrls { url }
+      mainMvUrls { url }
+      photoUrl
+      user { userName }
+    }
+  }
+}
+"""
+
+async def _get_kuaishou_direct(url: str) -> dict:
+    """直接打 Kuaishou GraphQL API，不走 yt-dlp 或 Playwright"""
+    # 從 URL 提取 photoId
+    photo_m = re.search(r'(?:short-video|photo|v)/([a-zA-Z0-9]+)', url)
+    if not photo_m:
+        return {}
+    photo_id = photo_m.group(1)
+    
+    for page_val in ("home", "search"):
+        try:
+            async with httpx.AsyncClient(timeout=15, headers=_KUAISHOU_HEADERS, follow_redirects=True) as client:
+                payload = {
+                    "operationName": "visionVideoDetail",
+                    "variables": {"photoId": photo_id, "page": page_val, "type": "short_video"},
+                    "query": _KUAISHOU_QUERY,
+                }
+                resp = await client.post("https://www.kuaishou.com/graphql", json=payload)
+                if resp.status_code != 200:
+                    continue
+                d = resp.json()
+                data = d.get("data", {}) or {}
+                detail = data.get("visionVideoDetail", {}) or {}
+                photo = detail.get("photo") or {}
+                if not photo or not photo.get("id"):
+                    continue
+                
+                title = photo.get("caption", "快手影片") or "快手影片"
+                duration = photo.get("duration", 0) or 0
+                
+                # 取 CDN URL
+                cdn = ""
+                mv_urls = photo.get("mainMvUrls") or []
+                if mv_urls and isinstance(mv_urls, list):
+                    cdn = mv_urls[0].get("url", "") or ""
+                if not cdn:
+                    cdn = photo.get("photoUrl", "") or ""
+                if not cdn:
+                    continue
+                
+                # 取縮圖
+                thumb = ""
+                covers = photo.get("coverUrls") or []
+                if covers and isinstance(covers, list):
+                    thumb = covers[0].get("url", "") or ""
+                
+                # 取上傳者
+                user = photo.get("user") or {}
+                uploader = user.get("userName", "") or ""
+                
+                duration_sec = duration // 1000 if duration > 1000 else duration
+                
+                print(f"[kuaishou_direct] OK photo_id={photo_id}")
+                return {
+                    "title": title[:80],
+                    "thumbnail": thumb,
+                    "duration": duration_sec,
+                    "uploader": uploader,
+                    "cdn_url": cdn,
+                    "platform": "Kuaishou",
+                    "formats": [{"id": "best", "label": "原始畫質", "height": 0}],
+                }
+        except Exception as ex:
+            print(f"[kuaishou_direct] {page_val} 失敗: {ex}")
+            continue
+    
+    return {}
+
 
 async def _get_tiktok_via_tikwm(url: str) -> dict:
     try:
@@ -978,8 +1071,22 @@ async def video_info(url: str):
 
     if _is_kuaishou(real_url):
         from urllib.parse import quote as _q
+        # 優先：直接打 Kuaishou GraphQL API（不需要瀏覽器，雲端可用）
+        ks_direct = await _get_kuaishou_direct(real_url)
+        if ks_direct.get("cdn_url"):
+            cdn_ks = ks_direct["cdn_url"]
+            proxy_ks = f"/api/proxy-video?url={_q(cdn_ks, safe='')}&referer=https://www.kuaishou.com/"
+            return JSONResponse({
+                "title": ks_direct.get("title","快手影片"),
+                "thumbnail": ks_direct.get("thumbnail",""),
+                "duration": ks_direct.get("duration",0),
+                "uploader": ks_direct.get("uploader",""),
+                "platform":"Kuaishou","url":real_url,"has_video":True,
+                "proxy_url":proxy_ks,"cdn_url":cdn_ks,
+                "formats":[{"id":"best","label":"原始畫質","height":0}],
+            })
+        # fallback：yt-dlp
         loop_ks = asyncio.get_event_loop()
-        # 先用 yt-dlp（不需要瀏覽器，雲端可用）
         def _ks_ytdlp():
             opts_ks = {"quiet":True,"no_warnings":True,"skip_download":True,
                        "http_headers":{"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}}
@@ -999,7 +1106,7 @@ async def video_info(url: str):
                 })
         except Exception:
             pass
-        # fallback：Playwright（本機可用）
+        # fallback：Playwright（本機備用）
         cdn_info = await _get_kuaishou_cdn(real_url)
         cdn = cdn_info.get("cdn_url") or ""
         proxy = f"/api/proxy-video?url={_q(cdn, safe='')}&referer=https://www.kuaishou.com/" if cdn else ""
@@ -1749,7 +1856,19 @@ async def _dl_progress(real_url: str, title: str, out_dir: Path,
                 yield {"type":"done","filename":fpath.name,"saved_dir":str(out_dir),"size_mb":round(fpath.stat().st_size/1024/1024,1)}
                 return
 
-        # yt-dlp（雲端可用，不需要瀏覽器）
+        # 直接打 Kuaishou GraphQL API（雲端可用）
+        yield {"type":"progress","pct":8,"msg":"嘗試直連快手 API..."}
+        ks_direct = await _get_kuaishou_direct(real_url)
+        cdn_direct = ks_direct.get("cdn_url","") or ""
+        if cdn_direct:
+            safe_d = re.sub(r'[\\/:*?"<>|]', '_', ks_direct.get("title",title))[:60]
+            fpath_d = out_dir / f"{safe_d}.mp4"
+            async for evt in httpx_dl(cdn_direct, fpath_d, ks_h, 10, 90): yield evt
+            if fpath_d.exists() and fpath_d.stat().st_size > 50000:
+                yield {"type":"done","filename":fpath_d.name,"saved_dir":str(out_dir),"size_mb":round(fpath_d.stat().st_size/1024/1024,1)}
+                return
+
+        # yt-dlp（雲端可用）
         yield {"type":"progress","pct":8,"msg":"嘗試 yt-dlp 解析快手..."}
         res_ks, err_ks = [], []
         safe = re.sub(r'[\\/:*?"<>|]', '_', title)[:60]
