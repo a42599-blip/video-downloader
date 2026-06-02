@@ -542,9 +542,9 @@ async function dlVideo(url, title, cdnUrl, cdnAudioUrl, quality){
             toast(`✅ 已儲存：${d.filename}（${d.size_mb}MB）`);
             loadDls();
           }
-          // 下載完成後重置預覽區，讓用戶可以直接貼下一個連結
+          // 下載完成後不重置預覽區，讓用戶還可以看
+          // 只清空輸入框（方便貼下一個），但預覽留著
           setTimeout(()=>{
-            resetPreview();
             document.getElementById('url-inp').value='';
             document.getElementById('url-inp').focus();
           }, isMobile()?100:2200);
@@ -606,9 +606,9 @@ async function fetchUrl(){
       setTimeout(()=>hideProgress(),2000);
       const friendly=d.error_hint||'';
       if(friendly.includes('不支援')||friendly.includes('不支持')){
-        setSt('⚠️ 此平台暫時無法解析，請確認網址正確');
+        setSt('⚠️ 暫時無法解析，請確認網址正確');
       } else {
-        setSt('⚠️ '+friendly||'解析較慢，請稍後再試');
+        setSt(friendly ? '⚠️ '+friendly : '⚠️ 解析較慢，請稍後再試');
       }
       return;
     }
@@ -626,7 +626,7 @@ async function fetchUrl(){
       vid.style.display='none'; vid.src='';
       if(d.thumbnail){ thumb.src=d.thumbnail; thumb.style.display='block'; }
       else { document.getElementById('url-ph').style.display='flex'; }
-      if(!d.error_hint) setSt('⚠️ 此平台不支援直接預覽，但仍可去水印下載');
+      if(!d.error_hint) setSt('⚠️ 無法預覽，但可下載');
     };
     if(d.embed_url){
       const fr=document.getElementById('url-fr');
