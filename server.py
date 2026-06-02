@@ -149,8 +149,12 @@ DOWNLOAD_DIR.mkdir(exist_ok=True)
 
 # ── B站直連 API（繞過 yt-dlp 地區限制）────────────────────────────
 _BILI_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
     "Referer": "https://www.bilibili.com/",
+    "Origin": "https://www.bilibili.com",
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+    "Accept-Encoding": "gzip, deflate, br",
 }
 
 async def _get_bilibili_direct(url: str) -> dict:
@@ -162,9 +166,19 @@ async def _get_bilibili_direct(url: str) -> dict:
     params = {"bvid": bvid_m.group()} if bvid_m else {"aid": aid_m.group(1)}
     try:
         async with httpx.AsyncClient(timeout=20, headers=_BILI_HEADERS) as client:
-            # Step 1: 取元數據
-            meta = (await client.get("https://api.bilibili.com/x/web-interface/view", params=params)).json()
-            if meta.get("code") != 0:
+            # Step 1: 取元數據（嘗試多個 API 端點）
+            meta = None
+            for api_url in ["https://api.bilibili.com/x/web-interface/view", "https://api.bilibili.com/x/web-interface/view/detail"]:
+                try:
+                    resp = await client.get(api_url, params=params)
+                    if resp.status_code == 200:
+                        meta = resp.json()
+                        if meta.get("code") == 0:
+                            break
+                        meta = None
+                except Exception:
+                    continue
+            if not meta or meta.get("code") != 0:
                 return {}
             d = meta["data"]
             bvid  = d.get("bvid", "")
