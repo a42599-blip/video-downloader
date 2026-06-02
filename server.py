@@ -453,6 +453,38 @@ async def _get_douyin_fast(url: str) -> dict:
     except Exception as e:
         print(f"[douyin_fast/snaptik] {e}")
 
+    # ── 方法 4：yt-dlp 直連（用基本 anonymous cookies）───────────
+    try:
+        loop_dy = asyncio.get_event_loop()
+        def _dy_ytdlp():
+            import tempfile, os
+            # 建立臨時 cookie file（anonymous buvid3）
+            ck = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False, encoding="utf-8")
+            ck.write("# Netscape HTTP Cookie File\n")
+            ck.write(".douyin.com\tTRUE\t/\tTRUE\t0\tbuvid3\tlocal-12345678\n")
+            ck.write(".douyin.com\tTRUE\t/\tTRUE\t0\tb_nut\t1700000000\n")
+            ck.close()
+            opts = {"quiet":True,"no_warnings":True,"skip_download":True,
+                    "cookiefile":ck.name,
+                    "http_headers":{"User-Agent":"Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15"}}
+            try:
+                with yt_dlp.YoutubeDL(opts) as ydl:
+                    return ydl.extract_info(url, download=False)
+            finally:
+                try: os.unlink(ck.name)
+                except: pass
+        info = await asyncio.wait_for(loop_dy.run_in_executor(executor, _dy_ytdlp), timeout=15)
+        if info and info.get("url"):
+            return {
+                "title": info.get("title","抖音影片")[:80],
+                "thumbnail": info.get("thumbnail",""),
+                "duration": info.get("duration",0) or 0,
+                "uploader": info.get("uploader",""),
+                "cdn_url": info["url"], "cdn_audio_url": "",
+            }
+    except Exception as e:
+        print(f"[douyin_fast/ytdlp] {e}")
+
     return {}
 
 async def _get_douyin_info_api(aweme_id: str) -> dict:
