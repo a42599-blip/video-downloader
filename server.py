@@ -1837,7 +1837,7 @@ async def _dl_progress(real_url: str, title: str, out_dir: Path,
     if "youtube.com" in real_url or "youtu.be" in real_url:
         yield {"type":"progress","pct":5,"msg":"正在下載 YouTube 影片（Android 客戶端）..."}
         safe_yt = re.sub(r'[\\/:*?"<>|]', '_', title)[:60]
-        opts_yt = {"format":"bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+        opts_yt = {"format":"bestvideo[ext=mp4][vcodec^=avc1]+bestaudio[ext=m4a]/best[ext=mp4]/best",
                    "outtmpl":str(out_dir/f"{safe_yt}.%(ext)s"),"quiet":True,"no_warnings":True,
                    "merge_output_format":"mp4","concurrent_fragment_downloads":8,"updatetime":False,
                    "postprocessor_args":{"default":["-map_metadata","-1"]},
