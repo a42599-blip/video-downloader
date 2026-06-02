@@ -944,28 +944,31 @@ async def video_info(url: str):
                 "cdn_audio_url": "",
                 "formats":       [{"id":"best","label":"原始畫質","height":0}],
             })
-        # 快速 API 失敗 → 改用 API（a_bogus 簽名）取得影片資訊
-        dy_aweme_id = _parse_aweme_id(real_url) or ""
-        if dy_aweme_id:
-            api_info = await _get_douyin_info_api(dy_aweme_id)
-            video_url = api_info.get("video_url") or ""
-            if video_url:
-                from urllib.parse import quote as _q2
-                return JSONResponse({
-                    "title":         api_info.get("title", "抖音影片"),
-                    "thumbnail":     api_info.get("thumbnail", ""),
-                    "duration":      api_info.get("duration", 0),
-                    "uploader":      api_info.get("uploader", ""),
-                    "platform":      "Douyin",
-                    "url":           real_url,
-                    "has_video":     True,
-                    "proxy_url":     f"/api/proxy-video?url={_q2(video_url, safe='')}&referer=https://www.douyin.com/",
-                    "cdn_url":       video_url,
-                    "cdn_audio_url": "",
-                    "formats":       [{"id":"best","label":"原始畫質","height":0}],
-                })
+        # 快速 API 失敗 → 改用 Playwright（Railway 已安裝 Chromium）
+        from urllib.parse import quote as _q3
+        try:
+            cdn_info = await asyncio.wait_for(_get_douyin_cdn(real_url), timeout=20)
+        except:
+            cdn_info = {}
+        cdn = cdn_info.get("cdn_url") or ""
+        proxy_dy = f"/api/proxy-video?url={_q3(cdn, safe='')}" if cdn else ""
+        if cdn or cdn_info.get("title"):
+            return JSONResponse({
+                "title":         cdn_info.get("title", "抖音影片"),
+                "thumbnail":     cdn_info.get("thumbnail", ""),
+                "duration":      cdn_info.get("duration", 0),
+                "uploader":      cdn_info.get("uploader", ""),
+                "platform":      "Douyin",
+                "url":           real_url,
+                "has_video":     bool(cdn),
+                "proxy_url":     proxy_dy,
+                "cdn_url":       cdn,
+                "cdn_audio_url": cdn_info.get("cdn_audio_url") or "",
+                "formats":       cdn_info.get("formats", []),
+            })
         
         # 以上全失敗 → 不回傳錯誤，讓前端啟用下載按鈕
+        dy_aweme_id = _parse_aweme_id(real_url) or ""
         return JSONResponse({
             "title": "抖音影片", "thumbnail": "",
             "duration": 0, "uploader": "",
@@ -974,7 +977,7 @@ async def video_info(url: str):
             "cdn_url": "", "cdn_audio_url": "",
             "aweme_id": dy_aweme_id,
             "formats": [{"id":"best","label":"最高畫質","height":0}],
-            "_note": "快速解析失敗，仍可嘗試下載（下載時會改用 yt-dlp）",
+            "_note": "快速解析失敗，仍可嘗試下載",
         })
 
     loop = asyncio.get_event_loop()
