@@ -899,29 +899,28 @@ async def _get_kuaishou_direct(url: str) -> dict:
             print(f"[kuaishou_direct] {page_val} 失敗: {ex}")
             continue
     
-    # fallback: 使用第三方解析 API（類似 tikwm 之於抖音）
-    for api_url in [
-        f"https://tikwm.com/api/?url={url}&hd=1",
-    ]:
-        try:
-            async with httpx.AsyncClient(timeout=12, follow_redirects=True) as client:
-                r = await client.get(api_url, headers={"User-Agent": "Mozilla/5.0"})
-                d = r.json()
-                if d.get("code") == 0 and d.get("data"):
-                    dat = d["data"]
-                    cdn = dat.get("hdplay") or dat.get("play") or ""
-                    if cdn:
-                        return {
-                            "title": dat.get("title", "快手影片")[:80],
-                            "thumbnail": dat.get("cover", "") or "",
-                            "duration": dat.get("duration", 0) or 0,
-                            "uploader": (dat.get("author") or {}).get("nickname", "") or "",
-                            "cdn_url": cdn,
-                            "platform": "Kuaishou",
-                            "formats": [{"id": "best", "label": "原始畫質", "height": 0}],
-                        }
-        except Exception:
-            continue
+    # fallback：使用 tikwm（POST，跟抖音一樣的方式）
+    try:
+        async with httpx.AsyncClient(timeout=12, follow_redirects=True) as client:
+            r = await client.post("https://tikwm.com/api/",
+                data={"url": url, "hd": "1"},
+                headers={"User-Agent": "Mozilla/5.0"})
+            d = r.json()
+            if d.get("code") == 0 and d.get("data"):
+                dat = d["data"]
+                cdn = dat.get("hdplay") or dat.get("play") or ""
+                if cdn:
+                    return {
+                        "title": (dat.get("title", "快手影片") or "")[:80],
+                        "thumbnail": dat.get("cover", "") or dat.get("origin_cover", "") or "",
+                        "duration": dat.get("duration", 0) or 0,
+                        "uploader": (dat.get("author") or {}).get("nickname", "") or "",
+                        "cdn_url": cdn, "cdn_audio_url": "",
+                        "platform": "Kuaishou",
+                        "formats": [{"id": "best", "label": "原始畫質", "height": 0}],
+                    }
+    except Exception as e:
+        print(f"[kuaishou_tikwm] {e}")
     
     return {}
 

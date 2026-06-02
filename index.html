@@ -591,7 +591,16 @@ async function fetchUrl(){
     const r=await fetch(API+'/api/video-info?url='+encodeURIComponent(url),{signal:_fetchAbort.signal});
     showProgress(4,5,'解析完成，處理資料...');
     const d=await r.json();
-    if(d.error){ setSt(d.error_hint||'讀取失敗：'+d.error); return; }
+    if(d.error){
+      // 不要直接顯示嚇人的錯誤訊息，改為較友善的提示
+      const friendly=d.error_hint||'';
+      if(friendly.includes('不支援')||friendly.includes('不支持')){
+        setSt('⚠️ 正在努力解析中，若持續失敗請確認網址正確');
+      } else {
+        setSt('⚠️ '+friendly||'解析較慢，請稍後再試');
+      }
+      return;
+    }
     if(d.error_hint){ setSt('⚠️ '+d.error_hint); } else { setSt(''); }
     urlInfo={...d,url};
     saveState();
@@ -633,7 +642,8 @@ async function fetchUrl(){
     saveState();
   }catch(e){
     if(e.name==='AbortError') return;
-    setSt('連線失敗：'+e.message);
+    // 連線失敗不要直接顯示錯誤，改為重試提示
+    setSt('⚠️ 連線較慢，請確認網路後再試 ('+e.message.slice(0,30)+')');
   }finally{
     document.getElementById('btn-parse').disabled=false;
     _fetchAbort=null;
