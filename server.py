@@ -115,7 +115,7 @@ async def _get_youtube_via_invidious(url: str) -> dict:
         return {}
     for instance in INVIDIOUS_INSTANCES:
         try:
-            async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
+            async with httpx.AsyncClient(timeout=6, follow_redirects=True) as client:
                 resp = await client.get(f"{instance}/api/v1/videos/{vid_id}",
                                         params={"fields": "title,author,lengthSeconds,videoThumbnails,formatStreams,adaptiveFormats"})
                 if resp.status_code != 200:
