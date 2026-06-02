@@ -696,7 +696,7 @@ async function dlUrl(){
   if(!urlInfo) return;
   const btn=document.getElementById('btn-udl'), prog=document.getElementById('url-prog');
   const quality=urlInfo.selectedQuality||'best';
-  let cdnUrl=urlInfo.cdn_url||'';
+  let cdnUrl=urlInfo.proxy_url||urlInfo.cdn_url||'';
   const cdnAudioUrl=urlInfo.cdn_audio_url||'';
   if(quality!=='best' && urlInfo.formats && urlInfo.formats.length){
     const fmt=urlInfo.formats.find(f=>f.id===quality);
