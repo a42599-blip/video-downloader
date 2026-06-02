@@ -94,14 +94,7 @@ def _is_lux_platform(url: str) -> bool:
 
 # ── Invidious 公開實例（YouTube 替代前端，雲端 IP 不被封）──────
 INVIDIOUS_INSTANCES = [
-    "https://inv.tux.pizza",
-    "https://invidious.io.lol",
-    "https://yewtu.be",
-    "https://invidious.privacyredirect.com",
-    "https://iv.datura.network",
-    "https://invidious.nerdvpn.de",
-    "https://invidious.slipfox.xyz",
-    "https://youtube.owacon.dev",
+    # 全數失效（需認證），YouTube 直接走 yt-dlp Android 客戶端更快
 ]
 
 def _extract_youtube_id(url: str) -> str:
@@ -466,22 +459,40 @@ async def _get_douyin_fast(url: str) -> dict:
             ck.close()
             opts = {"quiet":True,"no_warnings":True,"skip_download":True,
                     "cookiefile":ck.name,
+                    "extractor_args":{"douyin":{"headers":{"User-Agent":"Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15"}}},
                     "http_headers":{"User-Agent":"Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15"}}
             try:
                 with yt_dlp.YoutubeDL(opts) as ydl:
-                    return ydl.extract_info(url, download=False)
+                    info = ydl.extract_info(url, download=False)
+                    if not info:
+                        return {}
+                    # 嘗試從多個欄位取得影片直連 URL
+                    cdn = info.get("url") or ""
+                    if not cdn:
+                        rfs = info.get("requested_formats") or []
+                        if rfs:
+                            cdn = rfs[0].get("url") or ""
+                    if not cdn:
+                        fmts = info.get("formats") or []
+                        for f in reversed(fmts):
+                            u = f.get("url") or ""
+                            if u:
+                                cdn = u
+                                break
+                    return {
+                        "title": info.get("title","抖音影片")[:80],
+                        "thumbnail": info.get("thumbnail",""),
+                        "duration": info.get("duration",0) or 0,
+                        "uploader": info.get("uploader","") or "",
+                        "cdn_url": cdn,
+                        "cdn_audio_url": "",
+                    }
             finally:
                 try: os.unlink(ck.name)
                 except: pass
-        info = await asyncio.wait_for(loop_dy.run_in_executor(executor, _dy_ytdlp), timeout=15)
-        if info and info.get("url"):
-            return {
-                "title": info.get("title","抖音影片")[:80],
-                "thumbnail": info.get("thumbnail",""),
-                "duration": info.get("duration",0) or 0,
-                "uploader": info.get("uploader",""),
-                "cdn_url": info["url"], "cdn_audio_url": "",
-            }
+        info = await asyncio.wait_for(loop_dy.run_in_executor(executor, _dy_ytdlp), timeout=20)
+        if info and info.get("cdn_url"):
+            return info
     except Exception as e:
         print(f"[douyin_fast/ytdlp] {e}")
 
@@ -1520,9 +1531,22 @@ async def _dl_progress(real_url: str, title: str, out_dir: Path,
                 with yt_dlp.YoutubeDL({**opts,"progress_hooks":[hook]}) as ydl:
                     info = ydl.extract_info(url, download=True)
                     raw = ydl.prepare_filename(info)
+                    # 先檢查標準副檔名
                     for ext in (".mp4",".webm",".mkv",".mov"):
                         c = Path(raw).with_suffix(ext)
-                        if c.exists(): res_list.append(c); return
+                        if c.exists() and c.stat().st_size > 50000:
+                            res_list.append(c)
+                            return
+                    # fallback：在輸出目錄找最近新增的 mp4 檔案
+                    import glob as _glob
+                    import time as _time
+                    now = _time.time()
+                    candidates = sorted(Path(out_dir).glob("*.mp4"),
+                                        key=lambda x: x.stat().st_mtime, reverse=True)
+                    for c in candidates:
+                        if now - c.stat().st_mtime < 120 and c.stat().st_size > 50000:
+                            res_list.append(c)
+                            return
                     res_list.append(Path(raw))
             except Exception as ex: err_list.append(str(ex))
             finally: asyncio.run_coroutine_threadsafe(q.put(None), loop)
