@@ -194,8 +194,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
       <div class="hero-brand">
         <div class="hero-logo">⬇️</div>
         <div>
-          <div class="hero-title">去水印下載工具</div>
-          <div class="hero-sub">貼上連結 · 一鍵去水印下載</div>
+          <div class="hero-title" data-i18n="title">去水印下載工具</div>
+          <div class="hero-sub" data-i18n="subtitle">貼上連結 · 一鍵去水印下載</div>
         </div>
       </div>
       <div class="hero-btns">
@@ -208,7 +208,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
     </div>
     <div class="plt-badges">
       <span class="pbadge pb-dy" data-i18n="dy">抖音</span>
-      <span class="pbadge pb-tk">TikTok</span>
+      <span class="pbadge pb-tk" data-i18n="tk">TikTok</span>
 
       <span class="pbadge pb-bi">B站</span>
       <span class="pbadge pb-yt">YouTube</span>
@@ -226,16 +226,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
     <div class="card-head">
       <div class="card-ico">🔗</div>
       <div>
-        <div class="card-name">貼上影片連結</div>
+        <div class="card-name" data-i18n="cardName">貼上影片連結</div>
         <div class="card-hint" data-i18n="cardHint">抖音 · TikTok · B站 · YouTube · 小紅書 · 蝦皮 — 支援分享文字直接貼上</div>
       </div>
     </div>
 
-    <textarea class="url-inp" id="url-inp" placeholder="貼上影片連結或抖音/TikTok 分享文字（整段貼上即可，自動解析）" rows="3" id="url-inp"></textarea>
+    <textarea class="url-inp" id="url-inp" data-i18n-placeholder="inputPlaceholder" placeholder="貼上影片連結或抖音/TikTok 分享文字（整段貼上即可，自動解析）" rows="3"></textarea>
 
     <div class="btn-row">
-      <button class="btn btn-paste" onclick="pasteAndParse()">📋 貼上並解析</button>
-      <button class="btn btn-parse" id="btn-parse" onclick="fetchUrl()">🔍 開始解析</button>
+      <button class="btn btn-paste" onclick="pasteAndParse()" data-i18n="btnPaste">📋 貼上並解析</button>
+      <button class="btn btn-parse" id="btn-parse" onclick="fetchUrl()" data-i18n="btnParse">🔍 開始解析</button>
     </div>
 
     <div id="st-url" class="st" style="display:none"></div>
@@ -258,7 +258,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
           <div class="qlabel">選擇畫質</div>
           <div class="qbtns" id="quality-btns"></div>
         </div>
-        <button class="btn btn-dl" id="btn-udl" onclick="dlUrl()" disabled>⬇️ 去水印下載</button>
+        <button class="btn btn-dl" id="btn-udl" onclick="dlUrl()" disabled data-i18n="btnDownload">⬇️ 去水印下載</button>
         <div id="url-prog" class="dl-prog"></div>
       </div>
     </div>
@@ -322,7 +322,7 @@ const LANG_DATA={
     title:"去水印下载工具",subtitle:"贴上链接 · 一键去水印下载",inputPlaceholder:"贴上影片链接或抖音/TikTok 分享文字（整段贴上即可，自动解析）",btnPaste:"📋 贴上并解析",btnParse:"🔍 开始解析",btnDownload:"⬇️ 去水印下载",btnAgree:"同意并继续使用",cardName:"贴上影片链接",cardHint:"抖音 · TikTok · 快手 · B站 · YouTube · 小红书 · 虾皮 — 支持分享文字直接贴上",step:"步骤",progressUrl:"解析网址中...",progressConnect:"正在连线目标平台...",progressFetch:"正在取得影片信息...",progressDone:"✅ 解析完成",progressFail:"❌ 解析失败",noDownloads:"暂无已下载影片",downloading:"下载中...",preparing:"准备中...",disclaimerTitle:"使用须知",disclaimerP1:"本工具仅供个人合法用途使用，例如下载自己拥有版权的内容、或在各平台明确允许下载的公开影片。",disclaimerLi1:"本工具不储存任何使用者影片或个人资料",disclaimerLi2:"下载行为由使用者自行负责，请遵守各国著作权法及各平台服务条款",disclaimerLi3:"本工具开发者不对任何使用者的下载行为承担法律责任",disclaimerAgree:"我已阅读并同意上述条款，且确认我的使用符合当地法律",errorRetry:"⚠️ 正在努力解析中，若持续失败请确认网址正确",errorSlow:"⚠️ 解析较慢，请稍后再试",errorTimeout:"⚠️ 连线较慢，请确认网络后再试",errorNoPreview:"⚠️ 此平台不支持直接预览，但仍可去水印下载",toastEmpty:"请先贴上网址或分享文字",toastNoUrl:"找不到有效网址，请确认贴上内容包含 http",downloadMobile:"⬇️ 下载中，请查看通知列...",downloadSavePhoto:"保存到照片",downloadSaveVideo:"保存影片/下载",downloadSent:"✅ 已送出",downloadRetry:"🔄 重试",downloadCancel:"已取消，可再次点击重试",langZhTW:"繁體中文",langZhCN:"简体中文",langEN:"English",
   },
   "en":{
-    title:"Watermark Remover",subtitle:"Paste link · Remove watermark with one click",inputPlaceholder:"Paste video link or Douyin/TikTok share text (auto-detect)",btnPaste:"📋 Paste & Parse",btnParse:"🔍 Parse",btnDownload:"⬇️ Download (No Watermark)",btnAgree:"I Agree & Continue",cardName:"Paste video link",cardHint:"Douyin · TikTok · Kuaishou · Bilibili · YouTube · Xiaohongshu · Shopee",step:"Step",progressUrl:"Parsing URL...",progressConnect:"Connecting to platform...",progressFetch:"Fetching video info...",progressDone:"✅ Complete",progressFail:"❌ Failed",noDownloads:"No downloads yet",downloading:"Downloading...",preparing:"Preparing...",disclaimerTitle:"Terms of Use",disclaimerP1:"This tool is for personal legal use only, such as downloading your own copyrighted content or public videos from platforms that explicitly allow downloading.",disclaimerLi1:"We do not store any user videos or personal data",disclaimerLi2:"Users are solely responsible for their downloads",disclaimerLi3:"The developer assumes no legal liability",disclaimerAgree:"I have read and agree to the terms above",errorRetry:"⚠️ Parsing, please try again if it persists",errorSlow:"⚠️ Slow connection, please wait...",errorTimeout:"⚠️ Connection timeout, please check your network",errorNoPreview:"⚠️ Preview not available, but you can still download",toastEmpty:"Please paste a URL first",toastNoUrl:"No valid URL found",downloadMobile:"⬇️ Downloading, check notification bar...",downloadSavePhoto:"Save to Photos",downloadSaveVideo:"Save Video/Download",downloadSent:"✅ Sent",downloadRetry:"🔄 Retry",downloadCancel:"Cancelled, tap to retry",langZhTW:"繁體中文",langZhCN:"简体中文",langEN:"English",
+    title:"Watermark Remover",subtitle:"Paste link · Remove watermark with one click",inputPlaceholder:"Paste video link or Douyin/TikTok share text (auto-detect)",btnPaste:"📋 Paste & Parse",btnParse:"🔍 Parse",btnDownload:"⬇️ Download (No Watermark)",btnAgree:"I Agree & Continue",cardName:"Paste video link",cardHint:"Douyin · TikTok · Bilibili · YouTube · Xiaohongshu · Shopee",step:"Step",progressUrl:"Parsing URL...",progressConnect:"Connecting to platform...",progressFetch:"Fetching video info...",progressDone:"✅ Complete",progressFail:"❌ Failed",noDownloads:"No downloads yet",downloading:"Downloading...",preparing:"Preparing...",disclaimerTitle:"Terms of Use",disclaimerP1:"This tool is for personal legal use only, such as downloading your own copyrighted content or public videos from platforms that explicitly allow downloading.",disclaimerLi1:"We do not store any user videos or personal data",disclaimerLi2:"Users are solely responsible for their downloads",disclaimerLi3:"The developer assumes no legal liability",disclaimerAgree:"I have read and agree to the terms above",errorRetry:"⚠️ Parsing, please try again if it persists",errorSlow:"⚠️ Slow connection, please wait...",errorTimeout:"⚠️ Connection timeout, please check your network",errorNoPreview:"⚠️ Preview not available, but you can still download",toastEmpty:"Please paste a URL first",toastNoUrl:"No valid URL found",downloadMobile:"⬇️ Downloading, check notification bar...",downloadSavePhoto:"Save to Photos",downloadSaveVideo:"Save Video/Download",downloadSent:"✅ Sent",downloadRetry:"🔄 Retry",downloadCancel:"Cancelled, tap to retry",langZhTW:"繁體中文",langZhCN:"简体中文",langEN:"English",
   },
 };
 let _currentLang=localStorage.getItem('vd_lang')||'zh-TW';
