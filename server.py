@@ -578,7 +578,7 @@ async def _pw_browser(p):
     _args = ["--no-sandbox", "--disable-blink-features=AutomationControlled",
              "--autoplay-policy=no-user-gesture-required",
              "--disable-dev-shm-usage", "--disable-gpu",
-             "--no-zygote", "--single-process"]
+             "--no-zygote"]
     # 本機 Windows：優先用 Edge
     if os.path.exists(EDGE_PATH):
         try:
@@ -733,7 +733,7 @@ async def _get_douyin_cdn(video_url: str) -> dict:
                 "window.chrome={runtime:{}};"
                 "window.outerWidth=1280;window.outerHeight=800;")
 
-            await page.goto(video_url, wait_until="domcontentloaded", timeout=30000)
+            await page.goto(video_url, wait_until="domcontentloaded", timeout=35000)
             await page.wait_for_timeout(2000)
             try:
                 await page.evaluate("document.querySelector('video')?.play()")
