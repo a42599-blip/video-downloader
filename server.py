@@ -500,8 +500,11 @@ async def _get_douyin_fast(url: str) -> dict:
 
 async def _get_douyin_info_api(aweme_id: str) -> dict:
     import sys as _sys
-    if DOUYIN_LIB not in _sys.path:
-        _sys.path.insert(0, DOUYIN_LIB)
+    # 支援兩種路徑：本機 DOUYIN_LIB 或 Railway 上的專案內 crawlers/
+    _crawler_paths = [DOUYIN_LIB, str(BASE_DIR / "crawlers")]
+    for p in _crawler_paths:
+        if p not in _sys.path and os.path.isdir(p):
+            _sys.path.insert(0, p)
 
     result = {"title": "抖音影片", "thumbnail": "", "duration": 0,
               "uploader": "", "video_url": None, "aweme_id": aweme_id}
@@ -515,7 +518,15 @@ async def _get_douyin_info_api(aweme_id: str) -> dict:
             cookie_str = _cookies_to_str(cookie_data)
         else:
             import yaml as _yaml, os as _os
-            cfg_path = _os.path.join(DOUYIN_LIB, "crawlers/douyin/web/config.yaml")
+            # 嘗試從多個路徑找 config.yaml
+            for _base in _crawler_paths:
+                _cfg = _os.path.join(_base, "crawlers/douyin/web/config.yaml") if "Douyin_TikTok" in _base \
+                       else _os.path.join(_base, "douyin/web/config.yaml")
+                if _os.path.isfile(_cfg):
+                    cfg_path = _cfg
+                    break
+            else:
+                cfg_path = _os.path.join(DOUYIN_LIB, "crawlers/douyin/web/config.yaml")
             with open(cfg_path, encoding="utf-8") as f:
                 cfg = _yaml.safe_load(f)
             cookie_str = cfg["TokenManager"]["douyin"]["headers"]["Cookie"]
