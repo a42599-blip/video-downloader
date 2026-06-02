@@ -943,7 +943,7 @@ async def video_info(url: str):
             "has_video": False, "proxy_url": "",
             "cdn_url": "", "cdn_audio_url": "",
             "aweme_id": dy_aweme_id,
-            "formats": [],
+            "formats": [{"id":"best","label":"最高畫質","height":0}],
             "_note": "快速解析失敗，仍可嘗試下載（下載時會改用 yt-dlp）",
         })
 
@@ -1278,6 +1278,9 @@ def list_downloads(device_id: str = ""):
     if device_id:
         allowed = _registry_get_files(device_id)
         files = [f for f in all_files if f["name"] in allowed]
+        # 如果 registry 無記錄但目錄有檔案（例如 Railway 重啟後），仍然顯示
+        if not files:
+            files = all_files
     else:
         files = all_files
     return JSONResponse(sorted(files, key=lambda x: x["name"]))
