@@ -1031,6 +1031,8 @@ async def video_info(url: str):
                 "proxy_url": "",
                 "formats": [{"id": "best", "label": "原始畫質（無浮水印）", "height": 0}],
             })
+        # tikwm 失敗（IP 可能被封），不繼續 yt-dlp 以免浪費時間
+        return JSONResponse({"error": "TikTok 暫時無法解析", "error_hint": "請稍後再試", "url": real_url})
 
     # ── B站：直打 Bilibili API（雲端/本機都能用，不靠 yt-dlp）─────
     is_bilibili = "bilibili.com" in real_url or "b23.tv" in real_url
