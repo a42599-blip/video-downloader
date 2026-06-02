@@ -1630,7 +1630,8 @@ async def _dl_progress(real_url: str, title: str, out_dir: Path,
     # ══ B站：直打 API 下載（雲端可用，不靠 yt-dlp/Lux）═══════════
     if "bilibili.com" in real_url or "b23.tv" in real_url:
         yield {"type":"progress","pct":5,"msg":"解析 B站影片..."}
-        bili_h = {**_BILI_HEADERS}
+        import uuid as _uuid_b
+        bili_h = {**_BILI_HEADERS, "Cookie": _BILI_COOKIE + f" buvid4={_uuid_b.uuid4().hex[:16]};"}
         cdn_b = hint_cdn
         use_title = title
         if not cdn_b:
