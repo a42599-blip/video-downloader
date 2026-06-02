@@ -391,7 +391,7 @@ async def _get_douyin_fast(url: str) -> dict:
     """超快取得抖音影片 CDN（不需要瀏覽器，1-3 秒）"""
     # ── 方法 1：tikwm.com（同時支援抖音/TikTok，最可靠）──────────
     try:
-        async with httpx.AsyncClient(timeout=8, follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=12, follow_redirects=True) as client:
             r = await client.post("https://tikwm.com/api/",
                 data={"url": url, "hd": "1"},
                 headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"})
@@ -412,7 +412,7 @@ async def _get_douyin_fast(url: str) -> dict:
 
     # ── 方法 2：douyin.wtf 公開 API ────────────────────────────
     try:
-        async with httpx.AsyncClient(timeout=6, follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
             r = await client.get("https://api.douyin.wtf/api",
                 params={"url": url, "minimal": "false"},
                 headers={"User-Agent": "Mozilla/5.0"})
@@ -433,7 +433,7 @@ async def _get_douyin_fast(url: str) -> dict:
 
     # ── 方法 3：snaptik.app 公開 API（備用）────────────────────
     try:
-        async with httpx.AsyncClient(timeout=6, follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=8, follow_redirects=True) as client:
             r = await client.post("https://snaptik.app/action-2025.php",
                 data={"url": url, "lang": "en"},
                 headers={
