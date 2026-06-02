@@ -14,8 +14,9 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# 安裝 Playwright Chromium（抖音/快手 Playwright 方式備用）
-RUN playwright install chromium --with-deps
+# 不安裝 Playwright Chromium（雲端 512MB 跑不動，節省空間和建置時間）
+# 如需 Playwright 支援，請升級到 Developer 方案（2GB RAM）後取消註解：
+# RUN playwright install chromium --with-deps
 
 # 複製應用程式
 COPY server.py .
