@@ -1124,20 +1124,22 @@ async def video_info(url: str):
 
     if _is_kuaishou(real_url):
         from urllib.parse import quote as _q
-        # 優先：直接打 Kuaishou GraphQL API（不需要瀏覽器，雲端可用）
+        # 優先：直接打 Kuaishou GraphQL / tikwm API
         ks_direct = await _get_kuaishou_direct(real_url)
-        if ks_direct.get("cdn_url"):
-            cdn_ks = ks_direct["cdn_url"]
-            proxy_ks = f"/api/proxy-video?url={_q(cdn_ks, safe='')}&referer=https://www.kuaishou.com/"
-            return JSONResponse({
-                "title": ks_direct.get("title","快手影片"),
-                "thumbnail": ks_direct.get("thumbnail",""),
-                "duration": ks_direct.get("duration",0),
-                "uploader": ks_direct.get("uploader",""),
-                "platform":"Kuaishou","url":real_url,"has_video":True,
-                "proxy_url":proxy_ks,"cdn_url":cdn_ks,
-                "formats":[{"id":"best","label":"原始畫質","height":0}],
-            })
+        cdn_ks = ks_direct.get("cdn_url","") or ""
+        # 確認是真的影片 URL（有 .mp4 或 video CDN 特徵），不是原始網址
+        if cdn_ks and ('.mp4' in cdn_ks or '/videoplayback' in cdn_ks or 'video' in cdn_ks.lower()):
+            if cdn_ks != real_url:  # 確保不是回傳原網址
+                proxy_ks = f"/api/proxy-video?url={_q(cdn_ks, safe='')}&referer=https://www.kuaishou.com/"
+                return JSONResponse({
+                    "title": ks_direct.get("title","快手影片"),
+                    "thumbnail": ks_direct.get("thumbnail",""),
+                    "duration": ks_direct.get("duration",0),
+                    "uploader": ks_direct.get("uploader",""),
+                    "platform":"Kuaishou","url":real_url,"has_video":True,
+                    "proxy_url":proxy_ks,"cdn_url":cdn_ks,
+                    "formats":[{"id":"best","label":"原始畫質","height":0}],
+                })
         # fallback：yt-dlp
         loop_ks = asyncio.get_event_loop()
         def _ks_ytdlp():
@@ -1888,7 +1890,8 @@ async def _dl_progress(real_url: str, title: str, out_dir: Path,
         yield {"type":"progress","pct":8,"msg":"嘗試直連快手 API..."}
         ks_direct = await _get_kuaishou_direct(real_url)
         cdn_direct = ks_direct.get("cdn_url","") or ""
-        if cdn_direct:
+        # 確認是真正的影片 URL，不是原始網址
+        if cdn_direct and cdn_direct != real_url and ('.mp4' in cdn_direct or 'video' in cdn_direct.lower()):
             safe_d = re.sub(r'[\\/:*?"<>|]', '_', ks_direct.get("title",title))[:60]
             fpath_d = out_dir / f"{safe_d}.mp4"
             async for evt in httpx_dl(cdn_direct, fpath_d, ks_h, 10, 90): yield evt
