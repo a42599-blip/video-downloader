@@ -139,7 +139,7 @@ async def _get_youtube_via_invidious(url: str) -> dict:
                 print(f"[invidious] {instance} OK vid={vid_id}")
                 return {"title": title, "uploader": author, "duration": duration,
                         "thumbnail": thumbnail, "cdn_url": cdn_url, "formats": formats,
-                        "platform": "YouTube", "_source": "invidious"}
+                        "platform": "YouTube", "has_video": True, "_source": "invidious"}
         except Exception as ex:
             print(f"[invidious] {instance} 失敗: {ex}")
             continue
