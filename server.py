@@ -381,72 +381,22 @@ def _cookies_to_netscape(cookie_list: list, path: str):
         f.write("\n".join(lines))
 
 async def _get_douyin_fast(url: str) -> dict:
-    """超快取得抖音影片 CDN（不需要瀏覽器，1-3 秒）"""
-    # ── 方法 1：tikwm.com（同時支援抖音/TikTok，最可靠）──────────
-    try:
-        await asyncio.sleep(0.5)  # 避免觸發 rate limit
-        async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
-            r = await client.post("https://tikwm.com/api/",
-                data={"url": url, "hd": "1"},
-                headers={"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"})
-            d = r.json()
-            if d.get("code") == 0 and d.get("data"):
-                dat = d["data"]
-                cdn = dat.get("hdplay") or dat.get("play") or ""
-                if cdn:
-                    return {
-                        "title":     dat.get("title", "抖音影片"),
-                        "thumbnail": dat.get("origin_cover") or dat.get("cover", ""),
-                        "duration":  dat.get("duration", 0),
-                        "uploader":  (dat.get("author") or {}).get("nickname", ""),
-                        "cdn_url":   cdn, "cdn_audio_url": "",
-                    }
-    except Exception as e:
-        print(f"[douyin_fast/tikwm] {e}")
-
-    # ── 方法 2：douyin.wtf 公開 API ────────────────────────────
-    try:
-        async with httpx.AsyncClient(timeout=6, follow_redirects=True) as client:
-            r = await client.get("https://api.douyin.wtf/api",
-                params={"url": url, "minimal": "false"},
-                headers={"User-Agent": "Mozilla/5.0"})
-            if r.status_code == 200:
-                d = r.json()
-                cdn = (d.get("video_data") or {}).get("nwm_video_url_HQ") or \
-                      (d.get("video_data") or {}).get("nwm_video_url") or ""
-                if cdn:
-                    return {
-                        "title":     d.get("desc", "抖音影片"),
-                        "thumbnail": d.get("cover", ""),
-                        "duration":  0,
-                        "uploader":  d.get("author", {}).get("nickname", ""),
-                        "cdn_url":   cdn, "cdn_audio_url": "",
-                    }
-    except Exception as e:
-        print(f"[douyin_fast/wtf] {e}")
-
-    # ── 方法 3：snaptik.app 公開 API（備用）────────────────────
+    """取得抖音影片 CDN（嘗試 snaptik + yt-dlp，各 6 秒快速失敗）"""
+    # ── 方法 1：snaptik.app 公開 API ──────────────────────────
     try:
         async with httpx.AsyncClient(timeout=6, follow_redirects=True) as client:
             r = await client.post("https://snaptik.app/action-2025.php",
                 data={"url": url, "lang": "en"},
-                headers={
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                    "Content-Type": "application/x-www-form-urlencoded",
-                })
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                          "Content-Type": "application/x-www-form-urlencoded"})
             import re as _re
-            # 從 HTML 回應中解析 CDN URL
             cdn_m = _re.search(r'https?://[^"\'<>]+?\.mp4[^"\'<>]*', r.text)
             if cdn_m:
-                return {
-                    "title": "抖音影片", "thumbnail": "",
-                    "duration": 0, "uploader": "",
-                    "cdn_url": cdn_m.group(0), "cdn_audio_url": "",
-                }
+                return {"title": "抖音影片", "thumbnail": "", "duration": 0, "uploader": "", "cdn_url": cdn_m.group(0), "cdn_audio_url": ""}
     except Exception as e:
         print(f"[douyin_fast/snaptik] {e}")
 
-    # ── 方法 4：yt-dlp 直連（用基本 anonymous cookies）───────────
+    # ── 方法 2：yt-dlp（用基本 anonymous cookies）────────────────
     try:
         loop_dy = asyncio.get_event_loop()
         def _dy_ytdlp():
@@ -490,7 +440,7 @@ async def _get_douyin_fast(url: str) -> dict:
             finally:
                 try: os.unlink(ck.name)
                 except: pass
-        info = await asyncio.wait_for(loop_dy.run_in_executor(executor, _dy_ytdlp), timeout=20)
+        info = await asyncio.wait_for(loop_dy.run_in_executor(executor, _dy_ytdlp), timeout=12)
         if info and info.get("cdn_url"):
             return info
     except Exception as e:
@@ -949,7 +899,7 @@ async def video_info(url: str):
         # 快速 API 失敗 → 改用 Playwright（Railway 已安裝 Chromium）
         from urllib.parse import quote as _q3
         try:
-            cdn_info = await asyncio.wait_for(_get_douyin_cdn(real_url), timeout=45)
+            cdn_info = await asyncio.wait_for(_get_douyin_cdn(real_url), timeout=25)
         except:
             cdn_info = {}
         cdn = cdn_info.get("cdn_url") or ""
