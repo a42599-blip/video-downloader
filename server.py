@@ -382,19 +382,23 @@ def _cookies_to_netscape(cookie_list: list, path: str):
 
 async def _get_douyin_fast(url: str) -> dict:
     """取得抖音影片 CDN（嘗試 snaptik + yt-dlp，各 6 秒快速失敗）"""
-    # ── 方法 1：snaptik.app 公開 API ──────────────────────────
+    # ── 方法 1：tikwm.com（還活著的第三方 API）──────────────────
     try:
+        await asyncio.sleep(0.6)
         async with httpx.AsyncClient(timeout=6, follow_redirects=True) as client:
-            r = await client.post("https://snaptik.app/action-2025.php",
-                data={"url": url, "lang": "en"},
-                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                          "Content-Type": "application/x-www-form-urlencoded"})
-            import re as _re
-            cdn_m = _re.search(r'https?://[^"\'<>]+?\.mp4[^"\'<>]*', r.text)
-            if cdn_m:
-                return {"title": "抖音影片", "thumbnail": "", "duration": 0, "uploader": "", "cdn_url": cdn_m.group(0), "cdn_audio_url": ""}
+            r = await client.post("https://tikwm.com/api/",
+                data={"url": url, "hd": "1"},
+                headers={"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15"})
+            d = r.json()
+            if d.get("code") == 0 and d.get("data"):
+                dat = d["data"]
+                cdn = dat.get("hdplay") or dat.get("play") or ""
+                if cdn:
+                    return {"title": dat.get("title", "抖音影片"), "thumbnail": dat.get("origin_cover") or dat.get("cover", ""),
+                            "duration": dat.get("duration", 0), "uploader": (dat.get("author") or {}).get("nickname", ""),
+                            "cdn_url": cdn, "cdn_audio_url": ""}
     except Exception as e:
-        print(f"[douyin_fast/snaptik] {e}")
+        print(f"[douyin_fast/tikwm] {e}")
 
     # ── 方法 2：yt-dlp（用基本 anonymous cookies）────────────────
     try:
