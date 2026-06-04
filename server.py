@@ -385,7 +385,7 @@ async def _get_douyin_fast(url: str) -> dict:
     # ── 方法 1：tikwm.com（還活著的第三方 API）──────────────────
     try:
         await asyncio.sleep(0.6)
-        async with httpx.AsyncClient(timeout=6, follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=4, follow_redirects=True) as client:
             r = await client.post("https://tikwm.com/api/",
                 data={"url": url, "hd": "1"},
                 headers={"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15"})
@@ -444,7 +444,7 @@ async def _get_douyin_fast(url: str) -> dict:
             finally:
                 try: os.unlink(ck.name)
                 except: pass
-        info = await asyncio.wait_for(loop_dy.run_in_executor(executor, _dy_ytdlp), timeout=12)
+        info = await asyncio.wait_for(loop_dy.run_in_executor(executor, _dy_ytdlp), timeout=8)
         if info and info.get("cdn_url"):
             return info
     except Exception as e:
@@ -479,7 +479,7 @@ async def _get_douyin_fast(url: str) -> dict:
             ua = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36"
             a_bogus = BogusManager.ab_model_2_endpoint(params, ua)
             api_url = f"https://www.douyin.com/aweme/v1/web/aweme/detail/?{_ue(params)}&a_bogus={a_bogus}"
-            async with httpx.AsyncClient(timeout=8) as client:
+            async with httpx.AsyncClient(timeout=5) as client:
                 headers = {"User-Agent": ua, "Referer": "https://www.douyin.com/"}
                 if cookie_str:
                     headers["Cookie"] = cookie_str
