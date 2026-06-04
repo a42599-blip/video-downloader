@@ -1897,3 +1897,4 @@ if __name__ == "__main__":
     threading.Thread(target=open_browser, daemon=True).start()
     port = int(os.environ.get("PORT", 7790))
     uvicorn.run(app, host="0.0.0.0", port=port)
+ 
