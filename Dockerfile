@@ -26,3 +26,4 @@ RUN mkdir -p 下載影片
 EXPOSE 7790
 
 CMD ["python", "server.py"]
+# rebuild Fri Jun  5 06:19:18     2026
