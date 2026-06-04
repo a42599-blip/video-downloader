@@ -946,7 +946,7 @@ async def video_info(url: str):
             done, pending = await asyncio.wait(
                 [fast_task, cdn_task],
                 return_when=asyncio.FIRST_COMPLETED,
-                timeout=28
+                timeout=15
             )
             results = {}
             for t in done:
