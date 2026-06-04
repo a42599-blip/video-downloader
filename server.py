@@ -921,30 +921,43 @@ async def video_info(url: str):
 
     if _is_douyin(real_url):
         from urllib.parse import quote as _q
-        # 快速 API（tikwm/douyin.wtf/snaptik），不需要瀏覽器，秒級回應
-        fast = await _get_douyin_fast(real_url)
-        if fast.get("cdn_url"):
-            cdn_f = fast["cdn_url"]
-            return JSONResponse({
-                "title":         fast.get("title", "抖音影片"),
-                "thumbnail":     fast.get("thumbnail", ""),
-                "duration":      fast.get("duration", 0),
-                "uploader":      fast.get("uploader", ""),
-                "platform":      "Douyin",
-                "url":           real_url,
-                "has_video":     True,
-                "proxy_url":     f"/api/proxy-video?url={_q(cdn_f, safe='')}&referer=https://www.douyin.com/",
-                "cdn_url":       cdn_f,
-                "cdn_audio_url": "",
-                "formats":       [{"id":"best","label":"原始畫質","height":0}],
-            })
-        # 快速 API 失敗 → 改用 Playwright（Railway 已安裝 Chromium）
-        from urllib.parse import quote as _q3
-        try:
-            cdn_info = await asyncio.wait_for(_get_douyin_cdn(real_url), timeout=25)
-        except:
-            cdn_info = {}
+        # 並行執行快速 API + Playwright，誰先成功用誰
+        async def _fast_or_fallback():
+            fast_task = asyncio.create_task(_get_douyin_fast(real_url))
+            cdn_task = asyncio.create_task(_get_douyin_cdn(real_url))
+            done, pending = await asyncio.wait(
+                [fast_task, cdn_task],
+                return_when=asyncio.FIRST_COMPLETED,
+                timeout=28
+            )
+            results = {}
+            for t in done:
+                try:
+                    r = t.result()
+                    if r and r.get("cdn_url"):
+                        results = r
+                        for p in pending:
+                            p.cancel()
+                        break
+                except:
+                    pass
+            if not results.get("cdn_url"):
+                for t in pending:
+                    t.cancel()
+                # 等還沒完成的任務
+                for t in [fast_task, cdn_task]:
+                    try:
+                        r = await asyncio.wait_for(t, timeout=5)
+                        if r and r.get("cdn_url"):
+                            results = r
+                            break
+                    except:
+                        pass
+            return results
+        
+        cdn_info = await _fast_or_fallback()
         cdn = cdn_info.get("cdn_url") or ""
+        from urllib.parse import quote as _q3
         proxy_dy = f"/api/proxy-video?url={_q3(cdn, safe='')}" if cdn else ""
         if cdn or cdn_info.get("title"):
             return JSONResponse({
