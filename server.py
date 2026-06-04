@@ -474,8 +474,7 @@ async def _get_douyin_fast(url: str) -> dict:
                     cookie_str = cookie_str.replace(old.group(), f'{k}={v}')
                 else:
                     cookie_str += f'; {k}={v}'
-            params = {"aweme_id": aweme_id, "version_code": "170400", "app_name": "aweme",
-                      "build_number": "170400", "device_platform": "android"}
+            params = {"aweme_id": aweme_id, "msToken": ""}
             ua = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36"
             a_bogus = BogusManager.ab_model_2_endpoint(params, ua)
             api_url = f"https://www.douyin.com/aweme/v1/web/aweme/detail/?{_ue(params)}&a_bogus={a_bogus}"
