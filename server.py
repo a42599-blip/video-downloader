@@ -450,12 +450,16 @@ async def _get_douyin_fast(url: str) -> dict:
     except Exception as e:
         print(f"[douyin_fast/ytdlp] {e}")
 
-    # ── 方法 3：a_bogus API + 公開 cookies ───────────
+    # ── 方法 3：a_bogus API + 新鮮 cookies ───────────
     try:
         aweme_id = _parse_aweme_id(url)
         if aweme_id:
             from crawlers.douyin.web.utils import BogusManager
             from urllib.parse import urlencode as _ue
+            # 先取得新鮮 cookies
+            async with httpx.AsyncClient(timeout=5) as c:
+                r = await c.get("https://www.douyin.com/", headers={"User-Agent": "Mozilla/5.0"})
+                fresh_cookies = dict(r.cookies)
             import yaml
             cfg_path = BASE_DIR / "crawlers/douyin/web/config.yaml"
             cookie_str = ""
@@ -463,6 +467,14 @@ async def _get_douyin_fast(url: str) -> dict:
                 with open(cfg_path, encoding="utf-8") as f:
                     cfg = yaml.safe_load(f)
                 cookie_str = cfg.get("TokenManager", {}).get("douyin", {}).get("headers", {}).get("Cookie", "")
+            # 用新鮮 cookies 覆蓋過期的
+            for name, value in fresh_cookies.items():
+                import re
+                old = re.search(f'{name}=[^;]+', cookie_str)
+                if old:
+                    cookie_str = cookie_str.replace(old.group(), f'{name}={value}')
+                else:
+                    cookie_str += f'; {name}={value}'
             params = {"aweme_id": aweme_id, "version_code": "170400", "app_name": "aweme",
                       "build_number": "170400", "device_platform": "android"}
             ua = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36"
