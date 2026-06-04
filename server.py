@@ -450,6 +450,44 @@ async def _get_douyin_fast(url: str) -> dict:
     except Exception as e:
         print(f"[douyin_fast/ytdlp] {e}")
 
+    # ── 方法 3：a_bogus API（純技術簽名，無需個人資料）───────────
+    try:
+        aweme_id = _parse_aweme_id(url)
+        if aweme_id:
+            from crawlers.douyin.web.utils import BogusManager
+            from urllib.parse import urlencode as _ue
+            params = {"aweme_id": aweme_id, "version_code": "170400", "app_name": "aweme",
+                      "build_number": "170400", "device_platform": "android"}
+            ua = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36"
+            a_bogus = BogusManager.ab_model_2_endpoint(params, ua)
+            api_url = f"https://www.douyin.com/aweme/v1/web/aweme/detail/?{_ue(params)}&a_bogus={a_bogus}"
+            async with httpx.AsyncClient(timeout=8) as client:
+                resp = await client.get(api_url, headers={
+                    "User-Agent": ua,
+                    "Referer": "https://www.douyin.com/",
+                })
+                if resp.status_code == 200:
+                    data = resp.json()
+                    if "aweme_detail" in data and data["aweme_detail"]:
+                        ad = data["aweme_detail"]
+                        video = ad.get("video", {})
+                        play_addr = video.get("play_addr", {})
+                        url_list = play_addr.get("url_list", [])
+                        if url_list:
+                            cdn = url_list[0].replace("playwm", "play")
+                            return {
+                                "title": (ad.get("desc") or "抖音影片")[:80],
+                                "thumbnail": video.get("cover", {}).get("url_list", [""])[0] if video.get("cover") else "",
+                                "duration": ad.get("duration", 0) // 1000 if ad.get("duration", 0) > 1000 else ad.get("duration", 0),
+                                "uploader": ad.get("author", {}).get("nickname", "") if ad.get("author") else "",
+                                "cdn_url": cdn,
+                                "cdn_audio_url": "",
+                            }
+    except ImportError:
+        print("[douyin_fast/abogus] crawler not available")
+    except Exception as e:
+        print(f"[douyin_fast/abogus] {e}")
+
     return {}
 
 async def _get_douyin_info_api(aweme_id: str) -> dict:
