@@ -456,11 +456,11 @@ async def _get_douyin_fast(url: str) -> dict:
         if aweme_id:
             from crawlers.douyin.web.utils import BogusManager
             from urllib.parse import urlencode as _ue
+            import re, yaml
             # 先取得新鮮 cookies
             async with httpx.AsyncClient(timeout=5) as c:
                 r = await c.get("https://www.douyin.com/", headers={"User-Agent": "Mozilla/5.0"})
                 fresh_cookies = dict(r.cookies)
-            import yaml
             cfg_path = BASE_DIR / "crawlers/douyin/web/config.yaml"
             cookie_str = ""
             if cfg_path.exists():
@@ -469,7 +469,6 @@ async def _get_douyin_fast(url: str) -> dict:
                 cookie_str = cfg.get("TokenManager", {}).get("douyin", {}).get("headers", {}).get("Cookie", "")
             # 用新鮮 cookies 覆蓋過期的
             for name, value in fresh_cookies.items():
-                import re
                 old = re.search(f'{name}=[^;]+', cookie_str)
                 if old:
                     cookie_str = cookie_str.replace(old.group(), f'{name}={value}')
