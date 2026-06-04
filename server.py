@@ -450,19 +450,40 @@ async def _get_douyin_fast(url: str) -> dict:
     except Exception as e:
         print(f"[douyin_fast/ytdlp] {e}")
 
-    # ── 方法 3：a_bogus API（純技術簽名，無 cookies）─────
+    # ── 方法 3：a_bogus API + 公開 cookies ────────────
     try:
         aweme_id = _parse_aweme_id(url)
         if aweme_id:
             from crawlers.douyin.web.utils import BogusManager
             from urllib.parse import urlencode as _ue
+            import re, yaml
+            # 先取得新鮮匿名 cookies（來自開源專案 config.yaml + 即時 session）
+            async with httpx.AsyncClient(timeout=5) as c:
+                r = await c.get("https://www.douyin.com/", headers={"User-Agent": "Mozilla/5.0"})
+                fresh = dict(r.cookies)
+            cfg_path = BASE_DIR / "crawlers/douyin/web/config.yaml"
+            cookie_str = ""
+            if cfg_path.exists():
+                with open(cfg_path, encoding="utf-8") as f:
+                    cfg = yaml.safe_load(f)
+                cookie_str = cfg.get("TokenManager", {}).get("douyin", {}).get("headers", {}).get("Cookie", "")
+            # 用新鮮 cookies 覆蓋過期的
+            for k, v in fresh.items():
+                old = re.search(f'{k}=[^;]+', cookie_str)
+                if old:
+                    cookie_str = cookie_str.replace(old.group(), f'{k}={v}')
+                else:
+                    cookie_str += f'; {k}={v}'
             params = {"aweme_id": aweme_id, "version_code": "170400", "app_name": "aweme",
                       "build_number": "170400", "device_platform": "android"}
             ua = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36"
             a_bogus = BogusManager.ab_model_2_endpoint(params, ua)
             api_url = f"https://www.douyin.com/aweme/v1/web/aweme/detail/?{_ue(params)}&a_bogus={a_bogus}"
             async with httpx.AsyncClient(timeout=8) as client:
-                resp = await client.get(api_url, headers={"User-Agent": ua, "Referer": "https://www.douyin.com/"})
+                headers = {"User-Agent": ua, "Referer": "https://www.douyin.com/"}
+                if cookie_str:
+                    headers["Cookie"] = cookie_str
+                resp = await client.get(api_url, headers=headers)
                 if resp.status_code == 200:
                     data = resp.json()
                     if "aweme_detail" in data and data["aweme_detail"]:
