@@ -535,11 +535,13 @@ async function dlVideo(url, title, cdnUrl, cdnAudioUrl, quality){
           // Save to localStorage for persistent history
           try {
             const dlHistory = JSON.parse(localStorage.getItem('dl_history') || '[]');
+            const plat = (d.platform || url.match(/(?:youtube|youtu\.be|douyin|tiktok|bilibili|xiaohongshu|shopee)/i) || [''])[0] || '';
             dlHistory.unshift({
-              title: d.title || title || 'Unknown',
+              title: (d.title || title || 'Unknown').replace(/\.[^.]+$/,''),
               url: url,
               time: Date.now(),
-              size: d.size_mb || 0
+              size: d.size_mb || 0,
+              platform: plat
             });
             // Keep only last 50 records
             if (dlHistory.length > 50) dlHistory.length = 50;
@@ -780,11 +782,12 @@ async function loadDls(){
     // Add local history first (always visible)
     for (const item of localHistory) {
       combined.push({
-        name: item.title + '.mp4',
+        name: item.title || 'Video',
         url: item.url,
-        size_mb: item.size,
+        size_mb: item.size || '',
         time: item.time,
-        _local: true
+        _local: true,
+        platform: item.platform || ''
       });
       seen.add(item.url);
     }
@@ -802,6 +805,18 @@ async function loadDls(){
       const displayName = (f.name || f.title || 'Video').replace(/\.mp4$|\.[^.]+$/,'');
       const sizeTxt = f.size_mb ? f.size_mb + ' MB' : '';
       const timeTxt = f.time ? new Date(f.time).toLocaleDateString() : '';
+      if (f._local) {
+        // Local history item: click to re-parse with original URL
+        return `<div class="dl-card" onclick="document.getElementById('urlInput').value='${esc(f.url)}';parseVideo();">
+          <div class="dl-thumb-wrap">
+            <div class="dl-play-ov"><div class="dl-play-icon">🔄</div></div>
+          </div>
+          <div class="dl-info">
+            <div class="dl-fname" title="${esc(displayName)}">${esc(displayName)}</div>
+            <div class="dl-fmeta"><span>${f.platform || ''}</span><span>${timeTxt}</span></div>
+          </div>
+        </div>`;
+      }
       return `<div class="dl-card" onclick="openDlVideo('${esc(API+f.url)}','${esc(f.name||displayName)}','${f.size_mb||0}')">
         <div class="dl-thumb-wrap">
           <div class="dl-play-ov"><div class="dl-play-icon">▶</div></div>
