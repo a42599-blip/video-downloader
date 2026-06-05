@@ -362,20 +362,15 @@ function saveState(){
   if(!urlInfo) return;
   try{ 
     localStorage.setItem('vd_urlInfo', JSON.stringify(urlInfo));
-    // 同時存入解析歷史
+    // 存入完整解析歷史（含 CDN 網址、格式等）
     const history = JSON.parse(localStorage.getItem('vd_parseHistory') || '[]');
     const idx = history.findIndex(h => h.url === urlInfo.url);
     const entry = {
-      url: urlInfo.url,
-      title: urlInfo.title || '',
-      platform: urlInfo.platform || '',
-      uploader: urlInfo.uploader || '',
-      thumbnail: urlInfo.thumbnail || '',
+      ...urlInfo,
       time: Date.now()
     };
     if (idx >= 0) history[idx] = entry;
     else history.unshift(entry);
-    // 保留最近 50 筆
     if (history.length > 50) history.length = 50;
     localStorage.setItem('vd_parseHistory', JSON.stringify(history));
   }catch(e){}
@@ -399,10 +394,10 @@ function loadParseHistory(){
     return;
   }
   el.innerHTML='<div class="dls-grid">'+history.map(h=>{
-    return `<div class="dl-card" onclick="reParse('${esc(h.url)}')">
+    const hasDownload = !!(h.cdn_url || h.proxy_url || (h.formats && h.formats.length));
+    return `<div class="dl-card" onclick="restoreParse('${esc(h.url)}')">
       <div class="dl-thumb-wrap">
-        ${h.thumbnail ? `<img class="dl-thumb" src="${esc(h.thumbnail)}" loading="lazy">` : ''}
-        <div class="dl-play-ov"><div class="dl-play-icon">▶</div></div>
+        ${h.thumbnail ? `<img class="dl-thumb" src="${esc(h.thumbnail)}" loading="lazy">` : '<div style="padding:40px;text-align:center;color:#1d4a45">No Thumbnail</div>'}
       </div>
       <div class="dl-info">
         <div class="dl-fname" title="${esc(h.title||'')}">${esc((h.title||'Unknown').slice(0,30))}</div>
@@ -411,9 +406,18 @@ function loadParseHistory(){
     </div>`;
   }).join('')+'</div>';
 }
-function reParse(url){
-  document.getElementById('urlInput').value=url;
-  parseUrl();
+function restoreParse(url){
+  const history = JSON.parse(localStorage.getItem('vd_parseHistory') || '[]');
+  const entry = history.find(h => h.url === url);
+  if(!entry) return;
+  urlInfo = {...entry};
+  renderPreview(entry);
+  document.getElementById('preview').style.display='block';
+  const canDownload=!!(entry.cdn_url||entry.proxy_url||(entry.formats&&entry.formats.length));
+  document.getElementById('btn-udl').disabled=!canDownload;
+  document.getElementById('btn-udl').textContent=canDownload?'⬇️ 去水印下載':'❌ 無法下載';
+  // Scroll to preview
+  document.getElementById('preview').scrollIntoView({behavior:'smooth'});
 }
 function setSt(h){ const e=document.getElementById('st-url'); e.innerHTML=h; e.style.display=h?'block':'none'; }
 function showProgress(step,total,msg){
