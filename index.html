@@ -269,7 +269,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
   <!-- 已下載 -->
   <div class="dls-card">
     <div class="dls-head">
-      <h2 data-i18n="downloadedTitle">📁 已下載</h2>
+      <h2 data-i18n="downloadedTitle">📋 解析紀錄</h2>
       <button class="hero-btn" onclick="loadDls()" style="font-size:0.72rem;padding:5px 12px" data-i18n="refresh">🔄 重新整理</button>
     </div>
     <div id="dls-list"><div class="dls-empty" data-i18n="noDownloads">尚無已下載影片</div></div>
@@ -360,7 +360,25 @@ function isMobile(){ return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.us
 // ── 儲存/還原解析狀態（防止切換APP後資料遺失）──
 function saveState(){
   if(!urlInfo) return;
-  try{ localStorage.setItem('vd_urlInfo', JSON.stringify(urlInfo)); }catch(e){}
+  try{ 
+    localStorage.setItem('vd_urlInfo', JSON.stringify(urlInfo));
+    // 同時存入解析歷史
+    const history = JSON.parse(localStorage.getItem('vd_parseHistory') || '[]');
+    const idx = history.findIndex(h => h.url === urlInfo.url);
+    const entry = {
+      url: urlInfo.url,
+      title: urlInfo.title || '',
+      platform: urlInfo.platform || '',
+      uploader: urlInfo.uploader || '',
+      thumbnail: urlInfo.thumbnail || '',
+      time: Date.now()
+    };
+    if (idx >= 0) history[idx] = entry;
+    else history.unshift(entry);
+    // 保留最近 50 筆
+    if (history.length > 50) history.length = 50;
+    localStorage.setItem('vd_parseHistory', JSON.stringify(history));
+  }catch(e){}
 }
 function restoreState(){
   try{
@@ -371,6 +389,31 @@ function restoreState(){
     urlInfo=d;
     renderPreview(d);
   }catch(e){}
+}
+function loadParseHistory(){
+  const el=document.getElementById('dls-list');
+  if(!el) return;
+  const history = JSON.parse(localStorage.getItem('vd_parseHistory') || '[]');
+  if(!history.length){
+    el.innerHTML='<div class="dls-empty">'+__('noDownloads')+'</div>';
+    return;
+  }
+  el.innerHTML='<div class="dls-grid">'+history.map(h=>{
+    return `<div class="dl-card" onclick="reParse('${esc(h.url)}')">
+      <div class="dl-thumb-wrap">
+        ${h.thumbnail ? `<img class="dl-thumb" src="${esc(h.thumbnail)}" loading="lazy">` : ''}
+        <div class="dl-play-ov"><div class="dl-play-icon">▶</div></div>
+      </div>
+      <div class="dl-info">
+        <div class="dl-fname" title="${esc(h.title||'')}">${esc((h.title||'Unknown').slice(0,30))}</div>
+        <div class="dl-fmeta"><span>${h.platform||''}</span><span>${new Date(h.time).toLocaleDateString()}</span></div>
+      </div>
+    </div>`;
+  }).join('')+'</div>';
+}
+function reParse(url){
+  document.getElementById('urlInput').value=url;
+  parseUrl();
 }
 function setSt(h){ const e=document.getElementById('st-url'); e.innerHTML=h; e.style.display=h?'block':'none'; }
 function showProgress(step,total,msg){
@@ -762,72 +805,7 @@ function selectQuality(el,qid){
 
 /* ── 已下載清單 ── */
 async function loadDls(){
-  const el=document.getElementById('dls-list');
-  el.innerHTML='<div class="dls-empty">'+__('loading')+'</div>';
-  try{
-    // Load from localStorage first (persists across sessions)
-    const localHistory = JSON.parse(localStorage.getItem('dl_history') || '[]');
-    
-    // Also try server (for server-stored files)
-    let serverFiles = [];
-    try {
-      const r=await fetch(API+'/api/downloads?device_id='+encodeURIComponent(getDeviceId()));
-      serverFiles=await r.json();
-    } catch(e) {}
-    
-    // Combine: local history + server files
-    const combined = [];
-    const seen = new Set();
-    
-    // Add local history first (always visible)
-    for (const item of localHistory) {
-      combined.push({
-        name: item.title || 'Video',
-        url: item.url,
-        size_mb: item.size || '',
-        time: item.time,
-        _local: true,
-        platform: item.platform || ''
-      });
-      seen.add(item.url);
-    }
-    
-    // Add server files not already in local
-    for (const f of serverFiles) {
-      if (!seen.has(f.url)) {
-        combined.push(f);
-        seen.add(f.url);
-      }
-    }
-    
-    if(!combined.length){ el.innerHTML='<div class="dls-empty">'+__('noDownloads')+'</div>'; return; }
-    el.innerHTML='<div class="dls-grid">'+combined.map(f=>{
-      const displayName = (f.name || f.title || 'Video').replace(/\.mp4$|\.[^.]+$/,'');
-      const sizeTxt = f.size_mb ? f.size_mb + ' MB' : '';
-      const timeTxt = f.time ? new Date(f.time).toLocaleDateString() : '';
-      if (f._local) {
-        // Local history item: click to re-parse with original URL
-        return `<div class="dl-card" onclick="document.getElementById('urlInput').value='${esc(f.url)}';parseVideo();">
-          <div class="dl-thumb-wrap">
-            <div class="dl-play-ov"><div class="dl-play-icon">🔄</div></div>
-          </div>
-          <div class="dl-info">
-            <div class="dl-fname" title="${esc(displayName)}">${esc(displayName)}</div>
-            <div class="dl-fmeta"><span>${f.platform || ''}</span><span>${timeTxt}</span></div>
-          </div>
-        </div>`;
-      }
-      return `<div class="dl-card" onclick="openDlVideo('${esc(API+f.url)}','${esc(f.name||displayName)}','${f.size_mb||0}')">
-        <div class="dl-thumb-wrap">
-          <div class="dl-play-ov"><div class="dl-play-icon">▶</div></div>
-        </div>
-        <div class="dl-info">
-          <div class="dl-fname" title="${esc(displayName)}">${esc(displayName)}</div>
-          <div class="dl-fmeta"><span>${sizeTxt}</span><span>${timeTxt}</span></div>
-        </div>
-      </div>`;
-    }).join('')+'</div>';
-  }catch(e){ el.innerHTML='<div class="dls-empty">'+__('loadFailed')+'</div>'; }
+  loadParseHistory();
 }
 
 function openDlVideo(url,name,sizeMb){
