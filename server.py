@@ -1087,9 +1087,9 @@ async def video_info(url: str):
                 if _yt_cookies:
                     import tempfile as _tf
                     _ck = _tf.NamedTemporaryFile(mode="w", suffix=".txt", delete=False, encoding="utf-8")
-                    _ck.write("# YouTube Cookies\n")
+                    _ck.write("# Netscape HTTP Cookie File\n")
                     for _n, _v in _yt_cookies.items():
-                        _ck.write(f".youtube.com\tTRUE\t/\tFALSE\t0\t{_n}\t{_v}\n")
+                        _ck.write(f".youtube.com\tTRUE\t/\tTRUE\t0\t{_n}\t{_v}\n")
                     _ck.close()
                     opts["cookiefile"] = _ck.name
             except Exception as _ex:
