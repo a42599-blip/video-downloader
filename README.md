@@ -1,144 +1,40 @@
-# 🎬 去水印下載工具
+# 🎬 去水印下載工具 — 迭代開發版
 
-> 貼上連結 → 伺服器解析並下載影片 → 一鍵取得無水印影片
+> ⚠️ **此為迭代開發版，非 production**
+> 
+> **Production 網址：** https://v8i8.com（🔒 保底，不可動）
+> **迭代版網址：** https://aa.v8i8.com（🟡 開發測試用）
+>
+> **部署指南：** `C:\Users\USER\Desktop\部署指南_去水印迭代版.md`
 
-🌐 **立即使用：** [v8i8.com](https://v8i8.com)
+🌐 **立即使用（迭代版）：** [aa.v8i8.com](https://aa.v8i8.com)
+🌐 **正式版：** [v8i8.com](https://v8i8.com)
 
 ---
 
 ## 功能特色
 
-- ✅ **抖音** — 無水印影片下載
-- ✅ **YouTube** — 360p / 720p / 1080p 多畫質選擇
-- ✅ **TikTok** — 影片下載
-- ✅ **Bilibili** — 直接 API 解析
-- ✅ **小紅書 Xiaohongshu** — 圖片/影片下載
-- ✅ **蝦皮短影音 Shopee** — 短影音下載
-- ✅ **伺服器端下載** — 下載完成後用戶取回
-- ✅ **解析紀錄查詢** — 每次解析自動保存，點擊可重新解析
-- ✅ **手機/電腦通用** — 響應式設計
+- ✅ **6 大平台解析** — 抖音、YouTube、TikTok、B站、小紅書、蝦皮
+- ✅ **解析紀錄** — 自動保存最近 50 筆（localStorage）
+- ✅ **三國語言** — 繁體中文、简体中文、English
+- ✅ **並行處理** — 抖音三種方式同時跑
+- ✅ **剪貼簿自動貼上**
 
-## 架構
+## 與 production 的關係
 
 ```
-用戶貼入連結 → 伺服器解析 → 伺服器下載 → 用戶取回檔案
+diedai-ban（迭代版 🟡）    →     video-downloader（production 🟢）
+    │                                      │
+    ├── 所有修改先在這裡測                   ├── 保底版本，不可直接修改
+    ├── 測試完成後合併回 production           ├── 最終穩定版：6847de2
+    └── GitHub: a42599-blip/diedai-ban       └── GitHub: a42599-blip/video-downloader
 ```
 
-## API 文件
+## 當前版本
 
-本專案提供完整的 REST API，可供第三方開發者串接使用。
-
-### 解析影片
-
-```
-GET /api/video-info?url=<影片連結>
-```
-
-| 參數 | 說明 | 範例 |
-|:----|:----|:----|
-| `url` | 影片連結（必填） | `https://www.youtube.com/watch?v=xxx` |
-
-**回應範例：**
-```json
-{
-  "title": "影片標題",
-  "thumbnail": "https://...縮圖網址",
-  "duration": 180,
-  "uploader": "作者名稱",
-  "platform": "YouTube",
-  "has_video": true,
-  "cdn_url": "https://...CDN直鏈",
-  "formats": [
-    {"id": "18", "label": "360p", "height": 360, "cdn_url": "...", "single": true}
-  ]
-}
-```
-
-### 下載影片
-
-```
-GET /api/dl?url=<CDN網址>&filename=video.mp4
-```
-
-代理下載 CDN 影片，加上強制下載標頭。
-
-### 取得已下載列表
-
-```
-GET /api/files?device_id=<裝置ID>
-```
-
-### 健康檢查
-
-```
-GET /api/health
-```
-
----
-
-## 快速開始（本地開發）
-
-```bash
-# 安裝依賴
-pip install -r requirements.txt
-
-# 安裝瀏覽器（抖音解析需要）
-playwright install chromium
-
-# 啟動伺服器
-python server.py
-# → http://localhost:7798
-```
-
----
-
-## 自行部署
-
-本專案可部署到任何支援 Python 的雲端平台。
-
-### 方式一：Railway 自動部署
-
-1. Fork 此倉庫
-2. 在 Railway 建立新專案 → 選擇 Fork 的倉庫
-3. Railway 會自動偵測 Dockerfile 並部署
-
-### 方式二：Docker 手動部署
-
-```bash
-docker build -t video-downloader .
-docker run -p 7798:7798 video-downloader
-```
-
----
-
-## 技術棧
-
-| 層 | 技術 |
+| 項目 | 內容 |
 |:----|:------|
-| 前端 | HTML + CSS + JavaScript |
-| API | Python FastAPI |
-| 解析引擎 | yt-dlp + Playwright |
-| 爬蟲 | 自訂爬蟲模組 |
-| 部署 | Docker / Railway |
-
----
-
-## 專案結構
-
-```
-video-downloader/
-├── server.py              # FastAPI 主程式
-├── index.html             # 前端頁面
-├── crawlers/              # 爬蟲模組（抖音、蝦皮、B站）
-├── requirements.txt       # Python 依賴
-├── Dockerfile             # Docker 容器設定
-└── README.md              # 本說明文件
-```
-
----
-
-## 免責聲明
-
-- 本工具僅供學習與研究使用
-- 使用者應遵守目標平台的使用條款
-- 請勿用於任何侵權或非法用途
+| 目前版本 | commit `6847de2`（與 production 相同） |
+| 建立日期 | 2026-06-06 |
+| 狀態 | ✅ 線上，可用於開發測試 |
+| 部署方式 | push master → Railway 自動部署 |
