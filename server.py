@@ -1112,6 +1112,47 @@ async def video_info(url: str):
         from urllib.parse import quote as _q
         # 並行執行快速 API + Playwright，誰先成功用誰
         async def _fast_or_fallback():
+            # DIRECT approach - same logic as debug-douyin (confirmed working)
+            try:
+                aweme_id_direct = _parse_aweme_id(real_url)
+                if aweme_id_direct:
+                    from crawlers.douyin.web.abogus import ABogus
+                    from urllib.parse import urlencode as _ue_d, quote as _q_d
+                    async with httpx.AsyncClient(timeout=8) as c_d:
+                        r_d = await c_d.post("https://ttwid.bytedance.com/ttwid/union/register/",
+                            json={"region":"cn","aid":1768,"needFid":False,
+                                  "service":"www.ixigua.com",
+                                  "migrate_info":{"ticket":"","source":"node"},
+                                  "cbUrlProtocol":"https","union":True})
+                        ttwid_d = r_d.cookies.get("ttwid","")
+                    if ttwid_d:
+                        params_d = {"aweme_id":aweme_id_direct,"msToken":""}
+                        ua_d = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+                        a_bogus_d = _q_d(ABogus().get_value(params_d), safe="")
+                        api_url_d = "https://www.douyin.com/aweme/v1/web/aweme/detail/?" + _ue_d(params_d) + "&a_bogus=" + a_bogus_d
+                        async with httpx.AsyncClient(timeout=10) as c_d:
+                            resp_d = await c_d.get(api_url_d,
+                                headers={"User-Agent":ua_d, "Referer":"https://www.douyin.com/",
+                                         "Cookie":"ttwid=" + ttwid_d})
+                            if resp_d.status_code == 200:
+                                data_d = resp_d.json()
+                                ad_d = data_d.get("aweme_detail")
+                                if ad_d:
+                                    video_d = ad_d.get("video",{})
+                                    url_list_d = video_d.get("play_addr",{}).get("url_list",[])
+                                    if url_list_d:
+                                        cdn_d = url_list_d[0].replace("playwm","play")
+                                        return {
+                                            "title": (ad_d.get("desc") or "音音影片")[:80],
+                                            "thumbnail": video_d.get("cover",{}).get("url_list",[""])[0] if video_d.get("cover") else "",
+                                            "duration": ad_d.get("duration",0) // 1000 if ad_d.get("duration",0) > 1000 else ad_d.get("duration",0),
+                                            "uploader": ad_d.get("author",{}).get("nickname","") if ad_d.get("author") else "",
+                                            "cdn_url": cdn_d,
+                                            "cdn_audio_url": "",
+                                        }
+            except Exception:
+                pass
+            
             fast_task = asyncio.create_task(_get_douyin_fast(real_url))
             cdn_task = asyncio.create_task(_get_douyin_cdn(real_url))
             done, pending = await asyncio.wait(
