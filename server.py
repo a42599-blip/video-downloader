@@ -529,37 +529,28 @@ async def _get_douyin_via_thirdparty(url: str) -> dict:
     return {}
 
 
+
+
 async def _get_douyin_fast(url: str) -> dict:
-    """
-    Get Douyin video CDN - run all methods, first success wins.
-    Strategy:
-      1. a_bogus + fresh ttwid
-      2. Third-party APIs (parallel)
-      3. yt-dlp (fallback)
-    """
-    # Phase 1: Run a_bogus and third-party APIs in parallel
-    tasks = {
-        "abogus": asyncio.create_task(_get_douyin_via_abogus(url)),
-        "api":    asyncio.create_task(_get_douyin_via_thirdparty(url)),
-    }
-    done, pending = await asyncio.wait(
-        [tasks["abogus"], tasks["api"]],
-        return_when=asyncio.FIRST_COMPLETED,
-        timeout=12
-    )
+    """Get Douyin video - parallel a_bogus + thirdparty, then yt-dlp."""
+    # Phase 1: a_bogus + thirdparty parallel
+    t1 = asyncio.create_task(_get_douyin_via_abogus(url))
+    t2 = asyncio.create_task(_get_douyin_via_thirdparty(url))
+
+    done, pending = await asyncio.wait([t1, t2], return_when=asyncio.FIRST_COMPLETED, timeout=14)
     for t in done:
         try:
             r = t.result()
-            if r and r.get("cdn_url"):
+            if isinstance(r, dict) and r.get("cdn_url"):
                 for p in pending:
                     p.cancel()
                 return r
-        except:
+        except Exception:
             pass
-
-    # Phase 2: Cancel pending, try yt-dlp
     for p in pending:
         p.cancel()
+
+    # Phase 2: yt-dlp
     try:
         loop_dy = asyncio.get_event_loop()
         def _dy_ytdlp():
@@ -591,7 +582,7 @@ async def _get_douyin_fast(url: str) -> dict:
                                 cdn = u
                                 break
                     return {
-                        "title": info.get("title","抖音影片")[:80],
+                        "title": (info.get("title","")[:80]) or "抖音影片",
                         "thumbnail": info.get("thumbnail",""),
                         "duration": info.get("duration",0) or 0,
                         "uploader": info.get("uploader","") or "",
@@ -602,7 +593,7 @@ async def _get_douyin_fast(url: str) -> dict:
                 try: os.unlink(ck.name)
                 except: pass
         yt_result = await asyncio.wait_for(loop_dy.run_in_executor(executor, _dy_ytdlp), timeout=8)
-        if yt_result and yt_result.get("cdn_url"):
+        if isinstance(yt_result, dict) and yt_result.get("cdn_url"):
             return yt_result
     except Exception as e:
         print(f"[douyin_fast/ytdlp] {e}")
