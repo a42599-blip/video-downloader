@@ -381,20 +381,17 @@ def _cookies_to_netscape(cookie_list: list, path: str):
         f.write("\n".join(lines))
 
 
+
 async def _get_douyin_via_abogus(url: str) -> dict:
-    """
-    Use Douyin Web API with fresh session + a_bogus signature.
-    Most reliable direct method.
-    """
+    """Douyin Web API with fresh ttwid + a_bogus - simplified & robust."""
     try:
         aweme_id = _parse_aweme_id(url)
         if not aweme_id:
             return {}
-
         from crawlers.douyin.web.abogus import ABogus
         from urllib.parse import urlencode as _ue, quote as _q
 
-        # Get fresh ttwid from bytedance
+        # Step 1: Fresh ttwid
         async with httpx.AsyncClient(timeout=8) as c:
             r = await c.post("https://ttwid.bytedance.com/ttwid/union/register/",
                 json={"region":"cn","aid":1768,"needFid":False,
@@ -402,32 +399,20 @@ async def _get_douyin_via_abogus(url: str) -> dict:
                       "migrate_info":{"ticket":"","source":"node"},
                       "cbUrlProtocol":"https","union":True})
             ttwid = r.cookies.get("ttwid", "")
-
-        # Get session cookies from douyin.com
-        async with httpx.AsyncClient(timeout=8) as c:
-            r2 = await c.get("https://www.douyin.com/",
-                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"})
-            session = dict(r2.cookies)
-
-        if not ttwid and "ttwid" not in session:
-            print("[douyin_fast/abogus] no ttwid obtained")
+        if not ttwid:
             return {}
 
-        cookie_parts = [f"{k}={v}" for k, v in session.items()]
-        if ttwid:
-            cookie_parts.append(f"ttwid={ttwid}")
-        cookie_str = "; ".join(cookie_parts)
-
-        # Compute a_bogus signature
+        # Step 2: a_bogus
         params = {"aweme_id": aweme_id, "msToken": ""}
-        ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+        ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         a_bogus_val = _q(ABogus().get_value(params), safe='')
 
-        # Call API
-        api_url = f"https://www.douyin.com/aweme/v1/web/aweme/detail/?{_ue(params)}&a_bogus={a_bogus_val}"
+        # Step 3: Call API
+        api_url = "https://www.douyin.com/aweme/v1/web/aweme/detail/?" + _ue(params) + "&a_bogus=" + a_bogus_val
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.get(api_url,
-                headers={"User-Agent": ua, "Referer": "https://www.douyin.com/", "Cookie": cookie_str})
+                headers={"User-Agent": ua, "Referer": "https://www.douyin.com/",
+                         "Cookie": "ttwid=" + ttwid})
             if resp.status_code != 200:
                 return {}
             data = resp.json()
@@ -451,10 +436,8 @@ async def _get_douyin_via_abogus(url: str) -> dict:
     except ImportError:
         print("[douyin_fast/abogus] crawler module not available")
     except Exception as e:
-        print(f"[douyin_fast/abogus] {e}")
+        print(f"[douyin_fast/abogus] error: {e}")
     return {}
-
-
 async def _get_douyin_via_thirdparty(url: str) -> dict:
     """
     Parallel third-party APIs for Douyin.
@@ -1199,7 +1182,7 @@ async def video_info(url: str):
             "cdn_url": "", "cdn_audio_url": "",
             "aweme_id": dy_aweme_id,
             "formats": [{"id":"best","label":"最高畫質","height":0}],
-            "_note": "快速解析失敗，仍可嘗試下載",
+            "_note": "抖音解析失敗", "_debug": "請使用 /api/debug-douyin?url=... 查看詳細原因",
         })
 
     loop = asyncio.get_event_loop()
