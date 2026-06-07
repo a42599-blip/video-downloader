@@ -1037,6 +1037,86 @@ async def _download_from_cdn(cdn_url: str, out_dir: Path, title: str,
 def index():
     return FileResponse(str(BASE_DIR / "index.html"),
                         headers={"Cache-Control": "no-store, no-cache, must-revalidate"})
+@app.get("/api/debug-douyin")
+async def debug_douyin(url: str = ""):
+    """Debug endpoint to test Douyin API connectivity from Railway."""
+    import json as _json
+    result = {"url": url, "steps": []}
+    
+    if not url or "douyin.com" not in url:
+        result["error"] = "Please provide a douyin.com URL"
+        return JSONResponse(result)
+    
+    aweme_id = _parse_aweme_id(url)
+    result["aweme_id"] = aweme_id
+    result["steps"].append({"step": "parse_aweme_id", "ok": bool(aweme_id)})
+    
+    # Step 1: ttwid
+    try:
+        async with httpx.AsyncClient(timeout=8) as c:
+            r = await c.post("https://ttwid.bytedance.com/ttwid/union/register/",
+                json={"region":"cn","aid":1768,"needFid":False,"service":"www.ixigua.com",
+                      "migrate_info":{"ticket":"","source":"node"},"cbUrlProtocol":"https","union":True})
+            ttwid = r.cookies.get("ttwid", "")
+            result["steps"].append({"step": "ttwid_request", "ok": bool(ttwid), "ttwid_len": len(ttwid)})
+    except Exception as e:
+        result["steps"].append({"step": "ttwid_request", "ok": False, "error": str(e)[:200]})
+    
+    # Step 2: douyin.com session
+    try:
+        async with httpx.AsyncClient(timeout=8) as c:
+            r2 = await c.get("https://www.douyin.com/",
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"})
+            session_cookies = dict(r2.cookies)
+            result["steps"].append({"step": "douyin_session", "ok": bool(session_cookies), 
+                                      "cookies": list(session_cookies.keys())})
+    except Exception as e:
+        result["steps"].append({"step": "douyin_session", "ok": False, "error": str(e)[:200]})
+    
+    # Step 3: a_bogus + API call
+    if aweme_id:
+        try:
+            from crawlers.douyin.web.abogus import ABogus
+            from urllib.parse import urlencode as _ue, quote as _q
+            params = {"aweme_id": aweme_id, "msToken": ""}
+            a_bogus_val = _q(ABogus().get_value(params), safe='')
+            result["steps"].append({"step": "abogus_compute", "ok": True, "abogus_len": len(a_bogus_val)})
+            
+            # Build cookie
+            cookie_parts = []
+            if 'ttwid' in result['steps'][1] and result['steps'][1].get('ok'):
+                # ttwid from step 1
+                pass
+            if len(result['steps']) > 1 and result['steps'][1].get('ok'):
+                cookie_parts.append(f"ttwid={ttwid}")
+            
+            api_url = f"https://www.douyin.com/aweme/v1/web/aweme/detail/?{_ue(params)}&a_bogus={a_bogus_val}"
+            async with httpx.AsyncClient(timeout=10) as c:
+                resp = await c.get(api_url,
+                    headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                             "Referer": "https://www.douyin.com/", "Cookie": "; ".join(cookie_parts)})
+                result["steps"].append({"step": "api_call", "ok": resp.status_code == 200,
+                                          "status": resp.status_code})
+                if resp.status_code == 200:
+                    data = resp.json()
+                    ad = data.get("aweme_detail")
+                    if ad:
+                        vid = ad.get("video", {})
+                        urls = vid.get("play_addr", {}).get("url_list", [])
+                        result["steps"].append({"step": "video_data", "ok": True,
+                                                  "title": (ad.get("desc") or "?")[:40],
+                                                  "has_cdn": bool(urls)})
+                    else:
+                        result["steps"].append({"step": "video_data", "ok": False,
+                                                  "filter": data.get("filter_detail",{}).get("filter_reason"),
+                                                  "status_code": data.get("status_code")})
+        except ImportError as e:
+            result["steps"].append({"step": "abogus_import", "ok": False, "error": str(e)[:200]})
+        except Exception as e:
+            result["steps"].append({"step": "abogus_error", "ok": False, "error": str(e)[:300]})
+    
+    return JSONResponse(result)
+
 
 # ── URL 預覽 ──────────────────────────────────────────────
 @app.get("/api/video-info")
