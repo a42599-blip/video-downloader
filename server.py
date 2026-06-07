@@ -380,10 +380,11 @@ def _cookies_to_netscape(cookie_list: list, path: str):
     with open(path, "w", encoding="utf-8") as f:
         f.write("\n".join(lines))
 
+
 async def _get_douyin_via_abogus(url: str) -> dict:
     """
     Use Douyin Web API with fresh session + a_bogus signature.
-    This is the most reliable method for Douyin.
+    Most reliable direct method.
     """
     try:
         aweme_id = _parse_aweme_id(url)
@@ -393,14 +394,16 @@ async def _get_douyin_via_abogus(url: str) -> dict:
         from crawlers.douyin.web.abogus import ABogus
         from urllib.parse import urlencode as _ue, quote as _q
 
-        # Step 1: Get fresh ttwid from bytedance
+        # Get fresh ttwid from bytedance
         async with httpx.AsyncClient(timeout=8) as c:
             r = await c.post("https://ttwid.bytedance.com/ttwid/union/register/",
-                json={"region":"cn","aid":1768,"needFid":False,"service":"www.ixigua.com",
-                      "migrate_info":{"ticket":"","source":"node"},"cbUrlProtocol":"https","union":True})
+                json={"region":"cn","aid":1768,"needFid":False,
+                      "service":"www.ixigua.com",
+                      "migrate_info":{"ticket":"","source":"node"},
+                      "cbUrlProtocol":"https","union":True})
             ttwid = r.cookies.get("ttwid", "")
 
-        # Step 2: Get session cookies from douyin.com
+        # Get session cookies from douyin.com
         async with httpx.AsyncClient(timeout=8) as c:
             r2 = await c.get("https://www.douyin.com/",
                 headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"})
@@ -410,20 +413,19 @@ async def _get_douyin_via_abogus(url: str) -> dict:
             print("[douyin_fast/abogus] no ttwid obtained")
             return {}
 
-        # Build cookie string
         cookie_parts = [f"{k}={v}" for k, v in session.items()]
         if ttwid:
             cookie_parts.append(f"ttwid={ttwid}")
         cookie_str = "; ".join(cookie_parts)
 
-        # Step 3: Compute a_bogus signature
+        # Compute a_bogus signature
         params = {"aweme_id": aweme_id, "msToken": ""}
         ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-        a_bogus = _q(ABogus().get_value(params), safe='')
+        a_bogus_val = _q(ABogus().get_value(params), safe='')
 
-        # Step 4: Call the API
-        api_url = f"https://www.douyin.com/aweme/v1/web/aweme/detail/?{_ue(params)}&a_bogus={a_bogus}"
-        async with httpx.AsyncClient(timeout=8) as client:
+        # Call API
+        api_url = f"https://www.douyin.com/aweme/v1/web/aweme/detail/?{_ue(params)}&a_bogus={a_bogus_val}"
+        async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.get(api_url,
                 headers={"User-Agent": ua, "Referer": "https://www.douyin.com/", "Cookie": cookie_str})
             if resp.status_code != 200:
@@ -456,7 +458,7 @@ async def _get_douyin_via_abogus(url: str) -> dict:
 async def _get_douyin_via_thirdparty(url: str) -> dict:
     """
     Parallel third-party APIs for Douyin.
-    Run multiple providers simultaneously, first to respond wins.
+    Multiple providers, first to respond wins.
     """
     APIS = [
         {
@@ -469,7 +471,7 @@ async def _get_douyin_via_thirdparty(url: str) -> dict:
         {
             "name": "douyin.wtf",
             "method": "GET",
-            "url": "https://api.douyin.wtf/api",
+            "url": "https://api.douyin.wtf/api/v1/video",
             "data": {"url": url, "minimal": "false"},
             "headers": {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
         },
@@ -497,18 +499,24 @@ async def _get_douyin_via_thirdparty(url: str) -> dict:
                                 "cdn_audio_url": "",
                             }
                 elif api["name"] == "douyin.wtf":
-                    vd = d.get("video_data") or []
+                    vd = d.get("video_data") or d.get("data") or []
+                    if isinstance(vd, dict):
+                        vd = [vd]
                     if vd:
-                        item = vd[0]
-                        cdn = item.get("video_url_hd") or item.get("video_url") or item.get("wm_video_url") or ""
+                        item = vd[0] if isinstance(vd, list) else vd
+                        cdn = (item.get("video_url_hd") or item.get("video_url") or
+                               item.get("wm_video_url") or item.get("play") or
+                               item.get("hdplay") or "")
                         if "watermark" in cdn or "wm=" in cdn:
-                            cdn2 = item.get("video_url") or item.get("video_url_hd") or ""
-                            if cdn2 and "watermark" not in cdn2:
-                                cdn = cdn2
+                            for k in ("video_url", "video_url_hd", "play", "hdplay"):
+                                v = item.get(k, "")
+                                if v and "watermark" not in v:
+                                    cdn = v
+                                    break
                         if cdn:
                             return {
                                 "title": (item.get("title") or item.get("desc") or "抖音影片")[:80],
-                                "thumbnail": item.get("cover") or "",
+                                "thumbnail": item.get("cover") or item.get("origin_cover") or "",
                                 "duration": item.get("duration", 0) or 0,
                                 "uploader": (item.get("author") or {}).get("nickname", "") if isinstance(item.get("author"), dict) else (item.get("author") or ""),
                                 "cdn_url": cdn,
@@ -540,85 +548,83 @@ async def _get_douyin_via_thirdparty(url: str) -> dict:
 
 async def _get_douyin_fast(url: str) -> dict:
     """
-    Get Douyin video CDN - run all methods in parallel, first success wins.
+    Get Douyin video CDN - run all methods, first success wins.
     Strategy:
-      1. a_bogus + fresh ttwid (most reliable, works consistently)
-      2. Third-party APIs (tikwm.com + douyin.wtf, parallel)
+      1. a_bogus + fresh ttwid
+      2. Third-party APIs (parallel)
       3. yt-dlp (fallback)
     """
-    async def _run_all():
-        # Phase 1: Run a_bogus and third-party APIs in parallel
-        tasks = {
-            "abogus": asyncio.create_task(_get_douyin_via_abogus(url)),
-            "api":    asyncio.create_task(_get_douyin_via_thirdparty(url)),
-        }
-        done, pending = await asyncio.wait(
-            [tasks["abogus"], tasks["api"]],
-            return_when=asyncio.FIRST_COMPLETED,
-            timeout=12
-        )
-        for t in done:
-            try:
-                r = t.result()
-                if r and r.get("cdn_url"):
-                    for p in pending:
-                        p.cancel()
-                    return r
-            except:
-                pass
-
-        # Phase 2: Cancel pending, try yt-dlp
-        for p in pending:
-            p.cancel()
+    # Phase 1: Run a_bogus and third-party APIs in parallel
+    tasks = {
+        "abogus": asyncio.create_task(_get_douyin_via_abogus(url)),
+        "api":    asyncio.create_task(_get_douyin_via_thirdparty(url)),
+    }
+    done, pending = await asyncio.wait(
+        [tasks["abogus"], tasks["api"]],
+        return_when=asyncio.FIRST_COMPLETED,
+        timeout=12
+    )
+    for t in done:
         try:
-            loop_dy = asyncio.get_event_loop()
-            def _dy_ytdlp():
-                import tempfile, os
-                ck = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False, encoding="utf-8")
-                ck.write("# Netscape HTTP Cookie File\n")
-                ck.write(".douyin.com\tTRUE\t/\tTRUE\t0\tbuvid3\tlocal-12345678\n")
-                ck.write(".douyin.com\tTRUE\t/\tTRUE\t0\tb_nut\t1700000000\n")
-                ck.close()
-                opts = {"quiet":True,"no_warnings":True,"skip_download":True,
-                        "cookiefile":ck.name,
-                        "extractor_args":{"douyin":{"headers":{"User-Agent":"Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15"}}},
-                        "http_headers":{"User-Agent":"Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15"}}
-                try:
-                    with yt_dlp.YoutubeDL(opts) as ydl:
-                        info = ydl.extract_info(url, download=False)
-                        if not info:
-                            return {}
-                        cdn = info.get("url") or ""
-                        if not cdn:
-                            rfs = info.get("requested_formats") or []
-                            if rfs:
-                                cdn = rfs[0].get("url") or ""
-                        if not cdn:
-                            fmts = info.get("formats") or []
-                            for f in reversed(fmts):
-                                u = f.get("url") or ""
-                                if u:
-                                    cdn = u
-                                    break
-                        return {
-                            "title": info.get("title","抖音影片")[:80],
-                            "thumbnail": info.get("thumbnail",""),
-                            "duration": info.get("duration",0) or 0,
-                            "uploader": info.get("uploader","") or "",
-                            "cdn_url": cdn,
-                            "cdn_audio_url": "",
-                        }
-                finally:
-                    try: os.unlink(ck.name)
-                    except: pass
-            yt_result = await asyncio.wait_for(loop_dy.run_in_executor(executor, _dy_ytdlp), timeout=8)
-            if yt_result and yt_result.get("cdn_url"):
-                return yt_result
-        except Exception as e:
-            print(f"[douyin_fast/ytdlp] {e}")
+            r = t.result()
+            if r and r.get("cdn_url"):
+                for p in pending:
+                    p.cancel()
+                return r
+        except:
+            pass
 
-        return {}
-    return await _run_all()
+    # Phase 2: Cancel pending, try yt-dlp
+    for p in pending:
+        p.cancel()
+    try:
+        loop_dy = asyncio.get_event_loop()
+        def _dy_ytdlp():
+            import tempfile, os
+            ck = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False, encoding="utf-8")
+            ck.write("# Netscape HTTP Cookie File\n")
+            ck.write(".douyin.com\tTRUE\t/\tTRUE\t0\tbuvid3\tlocal-12345678\n")
+            ck.write(".douyin.com\tTRUE\t/\tTRUE\t0\tb_nut\t1700000000\n")
+            ck.close()
+            opts = {"quiet":True,"no_warnings":True,"skip_download":True,
+                    "cookiefile":ck.name,
+                    "extractor_args":{"douyin":{"headers":{"User-Agent":"Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15"}}},
+                    "http_headers":{"User-Agent":"Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15"}}
+            try:
+                with yt_dlp.YoutubeDL(opts) as ydl:
+                    info = ydl.extract_info(url, download=False)
+                    if not info:
+                        return {}
+                    cdn = info.get("url") or ""
+                    if not cdn:
+                        rfs = info.get("requested_formats") or []
+                        if rfs:
+                            cdn = rfs[0].get("url") or ""
+                    if not cdn:
+                        fmts = info.get("formats") or []
+                        for f in reversed(fmts):
+                            u = f.get("url") or ""
+                            if u:
+                                cdn = u
+                                break
+                    return {
+                        "title": info.get("title","抖音影片")[:80],
+                        "thumbnail": info.get("thumbnail",""),
+                        "duration": info.get("duration",0) or 0,
+                        "uploader": info.get("uploader","") or "",
+                        "cdn_url": cdn,
+                        "cdn_audio_url": "",
+                    }
+            finally:
+                try: os.unlink(ck.name)
+                except: pass
+        yt_result = await asyncio.wait_for(loop_dy.run_in_executor(executor, _dy_ytdlp), timeout=8)
+        if yt_result and yt_result.get("cdn_url"):
+            return yt_result
+    except Exception as e:
+        print(f"[douyin_fast/ytdlp] {e}")
+
+    return {}
 async def _get_douyin_info_api(aweme_id: str) -> dict:
     import sys as _sys
     # 支援兩種路徑：本機 DOUYIN_LIB 或 Railway 上的專案內 crawlers/
@@ -854,7 +860,7 @@ async def _get_douyin_cdn(video_url: str) -> dict:
                 "window.chrome={runtime:{}};"
                 "window.outerWidth=1280;window.outerHeight=800;")
 
-            await page.goto(video_url, wait_until="domcontentloaded", timeout=35000)
+            await page.goto(video_url, wait_until="domcontentloaded", timeout=45000)
             await page.wait_for_timeout(2000)
             try:
                 await page.evaluate("document.querySelector('video')?.play()")
@@ -862,7 +868,7 @@ async def _get_douyin_cdn(video_url: str) -> dict:
                 pass
 
             try:
-                await asyncio.wait_for(found.wait(), timeout=18)
+                await asyncio.wait_for(found.wait(), timeout=25)
             except asyncio.TimeoutError:
                 pass
 
@@ -1057,7 +1063,7 @@ async def video_info(url: str):
             done, pending = await asyncio.wait(
                 [fast_task, cdn_task],
                 return_when=asyncio.FIRST_COMPLETED,
-                timeout=15
+                timeout=22
             )
             results = {}
             for t in done:
