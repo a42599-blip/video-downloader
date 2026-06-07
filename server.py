@@ -381,31 +381,41 @@ def _cookies_to_netscape(cookie_list: list, path: str):
         f.write("\n".join(lines))
 
 async def _get_douyin_fast(url: str) -> dict:
-    """取得抖音影片 CDN（嘗試 snaptik + yt-dlp，各 6 秒快速失敗）"""
-    # ── 方法 1：tikwm.com（還活著的第三方 API）──────────────────
-    try:
-        await asyncio.sleep(0.6)
-        async with httpx.AsyncClient(timeout=4, follow_redirects=True) as client:
-            r = await client.post("https://tikwm.com/api/",
-                data={"url": url, "hd": "1"},
-                headers={"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15"})
-            d = r.json()
-            if d.get("code") == 0 and d.get("data"):
-                dat = d["data"]
-                cdn = dat.get("hdplay") or dat.get("play") or ""
-                if cdn:
-                    return {"title": dat.get("title", "抖音影片"), "thumbnail": dat.get("origin_cover") or dat.get("cover", ""),
-                            "duration": dat.get("duration", 0), "uploader": (dat.get("author") or {}).get("nickname", ""),
-                            "cdn_url": cdn, "cdn_audio_url": ""}
-    except Exception as e:
-        print(f"[douyin_fast/tikwm] {e}")
+    """
+    取得抖音影片 CDN（并行执行所有方法，谁先成功用谁）。
+    策略：
+      1. 页面 HTML 解析（最新 SSR 嵌入资料，最快最可靠）
+      2. 第三方 API（tikwm.com / douyin.wtf 并行）
+      3. yt-dlp
+      4. a_bogus API（保留但放最后，非必要不装）
+    """
+    # Phase 1: 先跑最快的两个方法（页面解析 + 第三方 API）
+    tasks = {
+        "page": asyncio.create_task(_get_douyin_from_page(url)),
+        "api":  asyncio.create_task(_get_douyin_via_thirdparty(url)),
+    }
+    done, pending = await asyncio.wait(
+        [tasks["page"], tasks["api"]],
+        return_when=asyncio.FIRST_COMPLETED,
+        timeout=12
+    )
+    for t in done:
+        try:
+            r = t.result()
+            if r and r.get("cdn_url"):
+                for p in pending:
+                    p.cancel()
+                return r
+        except:
+            pass
 
-    # ── 方法 2：yt-dlp（用基本 anonymous cookies）────────────────
+    # Phase 2: 如果上面失败，取消 pending 改跑 yt-dlp
+    for p in pending:
+        p.cancel()
     try:
         loop_dy = asyncio.get_event_loop()
         def _dy_ytdlp():
             import tempfile, os
-            # 建立臨時 cookie file（anonymous buvid3）
             ck = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False, encoding="utf-8")
             ck.write("# Netscape HTTP Cookie File\n")
             ck.write(".douyin.com\tTRUE\t/\tTRUE\t0\tbuvid3\tlocal-12345678\n")
@@ -420,7 +430,6 @@ async def _get_douyin_fast(url: str) -> dict:
                     info = ydl.extract_info(url, download=False)
                     if not info:
                         return {}
-                    # 嘗試從多個欄位取得影片直連 URL
                     cdn = info.get("url") or ""
                     if not cdn:
                         rfs = info.get("requested_formats") or []
@@ -444,40 +453,39 @@ async def _get_douyin_fast(url: str) -> dict:
             finally:
                 try: os.unlink(ck.name)
                 except: pass
-        info = await asyncio.wait_for(loop_dy.run_in_executor(executor, _dy_ytdlp), timeout=8)
-        if info and info.get("cdn_url"):
-            return info
+        yt_result = await asyncio.wait_for(loop_dy.run_in_executor(executor, _dy_ytdlp), timeout=8)
+        if yt_result and yt_result.get("cdn_url"):
+            return yt_result
     except Exception as e:
         print(f"[douyin_fast/ytdlp] {e}")
 
-    # ── 方法 3：a_bogus API + 公開 cookies ────────────
+    # Phase 3: a_bogus（最后手段，因算法可能过时）
     try:
         aweme_id = _parse_aweme_id(url)
         if aweme_id:
             from crawlers.douyin.web.abogus import ABogus
             from urllib.parse import urlencode as _ue, quote as _q
-            import re
-            # 新鮮 session cookies
             async with httpx.AsyncClient(timeout=5) as c:
-                r = await c.get("https://www.douyin.com/", headers={"User-Agent": "Mozilla/5.0"})
+                r = await c.get("https://www.douyin.com/",
+                    headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"})
                 fresh = dict(r.cookies)
-            cookie_str = "__ac_nonce=067d687ac00d70af16eab; __ac_signature=_02B4Z6wo00f018O6kmgAAIDAR1H8JrcivBPDi5bAAJdBcf; ttwid=1%7C46sVJ6G5zO0ZRKBqbFef2B13U3CqP9gLwQEH8IV2y6A%7C1742112685%7Cae649397cca7dde21884d5f8e3e3d53eb2361aa64af04cd6889fa71d7f23344b"
-            for k, v in fresh.items():
-                old = re.search(f'{k}=[^;]+', cookie_str)
-                cookie_str = cookie_str.replace(old.group(), f'{k}={v}') if old else cookie_str + f'; {k}={v}'
+            cookie_parts = [f"{k}={v}" for k, v in fresh.items()]
+            cookie_str = "; ".join(cookie_parts)
+            if "ttwid" not in fresh:
+                return {}
             params = {"aweme_id": aweme_id, "msToken": ""}
-            ua = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36"
+            ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
             a_bogus = _q(ABogus().get_value(params), safe='')
             api_url = f"https://www.douyin.com/aweme/v1/web/aweme/detail/?{_ue(params)}&a_bogus={a_bogus}"
             async with httpx.AsyncClient(timeout=5) as client:
-                resp = await client.get(api_url, headers={"User-Agent": ua, "Referer": "https://www.douyin.com/", "Cookie": cookie_str})
+                resp = await client.get(api_url,
+                    headers={"User-Agent": ua, "Referer": "https://www.douyin.com/", "Cookie": cookie_str})
                 if resp.status_code == 200:
                     data = resp.json()
                     if "aweme_detail" in data and data["aweme_detail"]:
                         ad = data["aweme_detail"]
                         video = ad.get("video", {})
-                        play_addr = video.get("play_addr", {})
-                        url_list = play_addr.get("url_list", [])
+                        url_list = video.get("play_addr", {}).get("url_list", [])
                         if url_list:
                             cdn = url_list[0].replace("playwm", "play")
                             return {
@@ -492,9 +500,7 @@ async def _get_douyin_fast(url: str) -> dict:
         print("[douyin_fast/abogus] crawler not available")
     except Exception as e:
         print(f"[douyin_fast/abogus] {e}")
-
     return {}
-
 async def _get_douyin_info_api(aweme_id: str) -> dict:
     import sys as _sys
     # 支援兩種路徑：本機 DOUYIN_LIB 或 Railway 上的專案內 crawlers/
